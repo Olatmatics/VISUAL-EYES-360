@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # VISUAL EYES 360
 
 Industrial IoT fuel-station automation, cashless dispensing, independent pulser verification, tank monitoring, fleet management and multi-station control platform for the Nigerian downstream oil & gas market.
@@ -117,3 +118,7 @@ Expected result: `TOTAL: 27/27 passed`. This seeds a local SQLite database with 
 - Dispenser, nozzle, FCC, tank and tank-controller management screens beyond the dashboard counts.
 - OPay/POS integration, wallet, transactions, reconciliation, pricing, alerts and reports.
 - ESP32-S3 firmware, STM32 decision, electrical/safety design, Android APK, and all items in `docs/08-open-items.md`.
+=======
+# VISUAL-EYES-360
+FCC CONTROL AUTOMATION SOFTWARE FOR MANAGING RECONCILIATION, PRICE CHANGE, CPU COMMUNICATION AND ETC.....
+>>>>>>> 27ebb3852ae2623f58dd0950fbe533552b7b8a1c
