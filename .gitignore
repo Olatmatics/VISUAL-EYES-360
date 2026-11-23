@@ -1,0 +1,11 @@
+backend/.venv/
+__pycache__/
+*.py[cod]
+backend/visual_eyes_360.db*
+backend/.env
+web/node_modules/
+web/dist/
+web/.env*
+.vscode/
+.idea/
+*.log

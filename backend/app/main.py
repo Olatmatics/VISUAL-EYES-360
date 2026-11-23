@@ -1,0 +1,80 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, Response
+
+from app.core.config import settings
+from app.db.init_db import init_db
+import app.models
+from app.modules.alerts.router import router as alerts_router
+from app.modules.auth.router import router as auth_router
+from app.modules.customers.router import router as customers_router
+from app.modules.dashboard.router import router as dashboard_router
+from app.modules.forecourt.router import router as forecourt_router
+from app.modules.payments.router import router as payments_router
+from app.modules.prices.router import router as prices_router
+from app.modules.reconciliation.router import router as reconciliation_router
+from app.modules.reports.router import router as reports_router
+from app.modules.stations.router import router as stations_router
+from app.modules.tanks.router import router as tanks_router
+from app.modules.transactions.router import router as transactions_router
+from app.modules.users.router import router as users_router
+
+init_db()
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version="1.0.0",
+    description="Fuel station automation and industrial management platform — Complete backend",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register all forecourt IoT & management modules
+for router in (
+    auth_router,
+    users_router,
+    stations_router,
+    dashboard_router,
+    forecourt_router,
+    tanks_router,
+    transactions_router,
+    reconciliation_router,
+    payments_router,
+    customers_router,
+    prices_router,
+    alerts_router,
+    reports_router,
+):
+    app.include_router(router)
+
+
+@app.get("/", tags=["system"])
+def root():
+    return {
+        "app": settings.APP_NAME,
+        "status": "running",
+        "api_docs": "/docs",
+        "frontend_url": "http://localhost:5173",
+        "message": "VISUAL EYES 360 Backend API is active. Access the user portal at http://localhost:5173",
+    }
+
+
+@app.get("/health", tags=["system"])
+def health():
+    return {"status": "ok", "app": settings.APP_NAME, "environment": settings.ENVIRONMENT}
+
+
+@app.get("/setup/status", tags=["system"], include_in_schema=False)
+def setup_status_alias():
+    return RedirectResponse(url="/api/v1/setup/status")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
