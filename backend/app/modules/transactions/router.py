@@ -17,6 +17,8 @@ from app.models.core import (
     PaymentRecord,
     SystemAlert,
     Tank,
+    Wallet,
+    WalletLedgerEntry,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["transactions"])

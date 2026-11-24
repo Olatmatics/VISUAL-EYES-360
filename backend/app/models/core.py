@@ -700,6 +700,15 @@ class DeviceEvent(Base):
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class SystemSetting(Base):
+    """Persisted operator configuration (telemetry and network parameters)."""
+    __tablename__ = "system_settings"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
 class Notification(Base):
     """Outbound notification queue (email + in-app)."""
     __tablename__ = "notifications"

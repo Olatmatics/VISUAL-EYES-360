@@ -53,7 +53,7 @@ export default function PriceManagement() {
         station_id: targetStationId,
         nozzle_id: targetNozzleId,
       })
-      setSuccess(`Price updated successfully across ${res.nozzles_updated} nozzles. Wayne/Gilbarco protocol acknowledgement confirmed.`)
+      setSuccess(`Price updated successfully across ${res.nozzles_updated} nozzles.`)
       load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Price update failed')
@@ -163,7 +163,7 @@ export default function PriceManagement() {
                   <td>Nozzle #{p.nozzle_number}</td>
                   <td><strong>{p.product_code}</strong></td>
                   <td><strong style={{ color: 'var(--primary)', fontSize: '15px' }}>₦{p.price.toFixed(2)}/L</strong></td>
-                  <td><Badge tone="success">✓ Confirmed</Badge></td>
+                  <td><Badge tone={p.status === 'CONFIRMED' ? 'success' : 'warning'}>{p.status || 'PENDING'}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -194,7 +194,7 @@ export default function PriceManagement() {
                   <td>₦{h.previous_price.toFixed(2)}</td>
                   <td><strong style={{ color: 'var(--success)' }}>₦{h.new_price.toFixed(2)}</strong></td>
                   <td><code>{h.changed_by}</code></td>
-                  <td><Badge tone="success">CONFIRMED</Badge></td>
+                  <td><Badge tone={h.status === 'CONFIRMED' ? 'success' : 'warning'}>{h.status || 'PENDING'}</Badge></td>
                 </tr>
               ))}
             </tbody>

@@ -32,7 +32,7 @@ import Users from './pages/Users'
 function Protected({ children, module, action = 'view' }: { children: ReactNode; module?: string; action?: string }) {
   const { user, loading, can } = useAuth()
   const location = useLocation()
-  if (loading) return <div className="center-screen">Loading…</div>
+  if (loading) return <div className="center-screen"><div className="loading-orbit"><span /><span /><span /></div><span className="loading-caption">Restoring secure session…</span></div>
   if (!user) return <Navigate to="/login" replace />
   if (user.must_change_password && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />
@@ -50,6 +50,29 @@ function NotFound() {
   )
 }
 
+function MotionShell({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    const nodes = document.querySelectorAll<HTMLElement>('.reveal')
+    if (!('IntersectionObserver' in window)) {
+      nodes.forEach((node) => node.classList.add('is-visible'))
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible')
+          observer.unobserve(entry.target)
+        }
+      })
+    }, { threshold: 0.06, rootMargin: '0px 0px -20px 0px' })
+    nodes.forEach((node) => observer.observe(node))
+    return () => observer.disconnect()
+  }, [location.pathname])
+  return <div className="route-stage" key={location.pathname}>{children}</div>
+}
+
 export default function App() {
   useEffect(() => {
     const theme = localStorage.getItem('ve_theme')
@@ -60,6 +83,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <GeoProvider>
+          <MotionShell>
           <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<Setup />} />
@@ -88,7 +112,8 @@ export default function App() {
             <Route path="access-denied" element={<AccessDenied />} />
             <Route path="*" element={<NotFound />} />
           </Route>
-        </Routes>
+          </Routes>
+          </MotionShell>
         </GeoProvider>
       </AuthProvider>
     </BrowserRouter>

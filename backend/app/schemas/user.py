@@ -20,6 +20,12 @@ class ManagerCreate(BaseModel):
     all_stations: bool = False
     is_active: bool = True
     permissions: list[PermissionItem] = Field(default_factory=list)
+    role_code: str = "MANAGER"
+    scope_state_id: str | None = None
+    scope_lga_id: str | None = None
+    department: str | None = None
+    position: str | None = None
+    staff_id: str | None = None
 
     @field_validator("password")
     @classmethod
@@ -42,6 +48,12 @@ class ManagerUpdate(BaseModel):
     all_stations: bool | None = None
     is_active: bool | None = None
     permissions: list[PermissionItem] | None = None
+    role_code: str | None = None
+    scope_state_id: str | None = None
+    scope_lga_id: str | None = None
+    department: str | None = None
+    position: str | None = None
+    staff_id: str | None = None
 
 
 class ManagerOut(BaseModel):
@@ -56,5 +68,11 @@ class ManagerOut(BaseModel):
     permissions: list[str]
     last_login_at: datetime | None
     created_at: datetime
+    role_code: str | None = None
+    scope_state_id: str | None = None
+    scope_lga_id: str | None = None
+    department: str | None = None
+    position: str | None = None
+    staff_id: str | None = None
 
     model_config = {"from_attributes": True}

@@ -17,9 +17,13 @@ from app.modules.customers.router import router as customers_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.device_ingest.router import router as device_ingest_router
 from app.modules.forecourt.router import router as forecourt_router
+from app.modules.geo.router import router as geo_router
+from app.modules.operations.router import router as operations_router
 from app.modules.payments.router import router as payments_router
 from app.modules.prices.router import router as prices_router
 from app.modules.reconciliation.router import router as reconciliation_router
+from app.modules.settings.router import router as settings_router
+from app.modules.reports.exports_router import router as reports_exports_router
 from app.modules.reports.router import router as reports_router
 from app.modules.stations.router import router as stations_router
 from app.modules.tanks.router import router as tanks_router
@@ -58,6 +62,8 @@ for router in (
     dashboard_router,
     device_ingest_router,
     forecourt_router,
+    geo_router,
+    operations_router,
     tanks_router,
     transactions_router,
     reconciliation_router,
@@ -66,6 +72,8 @@ for router in (
     prices_router,
     alerts_router,
     reports_router,
+    reports_exports_router,
+    settings_router,
 ):
     app.include_router(router)
 

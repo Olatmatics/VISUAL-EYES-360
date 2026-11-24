@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, CSSProperties, InputHTMLAttributes, ReactNod
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="page-header">
+    <div className="page-header reveal">
       <div>
         <h1>{title}</h1>
         {subtitle && <p>{subtitle}</p>}
@@ -13,7 +13,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 }
 
 export function Card({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
-  return <div className={`card ${className}`} style={style}>{children}</div>
+  return <div className={`card reveal ${className}`} style={style}>{children}</div>
 }
 
 export function Button({ variant = 'primary', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' }) {

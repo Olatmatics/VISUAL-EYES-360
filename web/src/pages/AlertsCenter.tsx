@@ -38,6 +38,15 @@ export default function AlertsCenter() {
     }
   }
 
+  const act = async (id: string, action: string, body: object = {}) => {
+    try {
+      await api.post(`/alerts/${id}/${action}`, body)
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} alert`)
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -99,14 +108,26 @@ export default function AlertsCenter() {
                 <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
                   {a.is_resolved && `Resolved by: ${a.resolved_by} at ${a.resolved_at ? new Date(a.resolved_at).toLocaleTimeString() : ''}`}
                 </span>
-                {!a.is_resolved && can('alerts', 'manage') && (
-                  <Button
-                    variant="secondary"
-                    style={{ padding: '4px 10px', fontSize: '12px' }}
-                    onClick={() => { setResolvingAlert(a); setNotes('') }}
-                  >
-                    Investigate & Resolve
-                  </Button>
+                {can('alerts', 'manage') && (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {!a.acknowledged_at && (
+                      <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => act(a.id, 'acknowledge')}>Acknowledge</Button>
+                    )}
+                    <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                      onClick={() => {
+                        const to = window.prompt('Assign to user ID', a.assigned_to || '')
+                        if (to) act(a.id, 'assign', { assigned_to: to })
+                      }}>Assign</Button>
+                    {!a.is_resolved && (
+                      <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => act(a.id, 'escalate', { notes: 'Escalated from console' })}>Escalate</Button>
+                    )}
+                    {!a.is_resolved && (
+                      <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => { setResolvingAlert(a); setNotes('') }}>Investigate & Resolve</Button>
+                    )}
+                  </div>
                 )}
               </div>
             </Card>

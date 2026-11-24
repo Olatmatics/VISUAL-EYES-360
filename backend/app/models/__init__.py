@@ -37,6 +37,7 @@ from app.models.core import (
     State,
     Station,
     SystemAlert,
+    SystemSetting,
     Tank,
     TankCalibration,
     TankController,

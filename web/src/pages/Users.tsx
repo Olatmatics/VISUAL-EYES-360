@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { Badge, Button, Card, EmptyState, ErrorBanner, Input, Modal, PageHeader } from '../components/ui'
-import type { Manager, PermissionModule, Station } from '../types'
+import type { GeoLga, GeoState, Manager, PermissionModule, RoleOption, Station } from '../types'
 
 type FormState = {
   full_name: string
@@ -15,11 +15,18 @@ type FormState = {
   all_stations: boolean
   is_active: boolean
   selected: Record<string, boolean>
+  role_code: string
+  scope_state_id: string
+  scope_lga_id: string
+  department: string
+  position: string
+  staff_id: string
 }
 
 const emptyForm = (): FormState => ({
   full_name: '', manager_id: '', password: '', confirm_password: '', phone: '', email: '',
   station_ids: [], all_stations: false, is_active: true, selected: {},
+  role_code: 'MANAGER', scope_state_id: '', scope_lga_id: '', department: '', position: '', staff_id: '',
 })
 
 export default function Users() {
@@ -27,6 +34,9 @@ export default function Users() {
   const [managers, setManagers] = useState<Manager[]>([])
   const [modules, setModules] = useState<PermissionModule[]>([])
   const [stations, setStations] = useState<Station[]>([])
+  const [roles, setRoles] = useState<RoleOption[]>([])
+  const [geoStates, setGeoStates] = useState<GeoState[]>([])
+  const [scopeLgas, setScopeLgas] = useState<GeoLga[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<Manager | null>(null)
@@ -42,13 +52,22 @@ export default function Users() {
       api.get<Manager[]>('/users'),
       api.get<PermissionModule[]>('/permissions/catalogue'),
       api.get<Station[]>('/stations'),
+      api.get<RoleOption[]>('/users/roles'),
+      api.get<GeoState[]>('/geo/states'),
     ])
-      .then(([m, p, s]) => { setManagers(m); setModules(p); setStations(s) })
+      .then(([m, p, s, r, g]) => { setManagers(m); setModules(p); setStations(s); setRoles(r); setGeoStates(g) })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load users'))
       .finally(() => setLoading(false))
   }
 
   useEffect(load, [])
+
+  useEffect(() => {
+    if (!form.scope_state_id) { setScopeLgas([]); return }
+    api.get<GeoLga[]>(`/geo/states/${form.scope_state_id}/lgas`)
+      .then(setScopeLgas)
+      .catch(() => setScopeLgas([]))
+  }, [form.scope_state_id])
 
   const openCreate = () => {
     setForm(emptyForm())
@@ -67,6 +86,12 @@ export default function Users() {
       all_stations: manager.all_stations,
       is_active: manager.is_active,
       selected,
+      role_code: manager.role_code ?? 'MANAGER',
+      scope_state_id: manager.scope_state_id ?? '',
+      scope_lga_id: manager.scope_lga_id ?? '',
+      department: manager.department ?? '',
+      position: manager.position ?? '',
+      staff_id: manager.staff_id ?? '',
     })
     setEditing(manager)
     setCreating(false)
@@ -96,6 +121,12 @@ export default function Users() {
           full_name: form.full_name, phone: form.phone, email: form.email,
           station_ids: form.station_ids, all_stations: form.all_stations,
           is_active: form.is_active, permissions,
+          role_code: form.role_code,
+          scope_state_id: form.scope_state_id || null,
+          scope_lga_id: form.scope_lga_id || null,
+          department: form.department || null,
+          position: form.position || null,
+          staff_id: form.staff_id || null,
         })
       } else {
         await api.post('/users/managers', {
@@ -103,6 +134,12 @@ export default function Users() {
           password: form.password, confirm_password: form.confirm_password,
           phone: form.phone, email: form.email, station_ids: form.station_ids,
           all_stations: form.all_stations, is_active: form.is_active, permissions,
+          role_code: form.role_code,
+          scope_state_id: form.scope_state_id || null,
+          scope_lga_id: form.scope_lga_id || null,
+          department: form.department || null,
+          position: form.position || null,
+          staff_id: form.staff_id || null,
         })
       }
       setCreating(false)
@@ -154,13 +191,15 @@ export default function Users() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Manager</th><th>User ID</th><th>Stations</th><th>Permissions</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
+                <tr><th>Manager</th><th>User ID</th><th>Designation</th><th>Jurisdiction</th><th>Stations</th><th>Permissions</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {managers.map((manager) => (
                   <tr key={manager.id}>
                     <td><strong>{manager.full_name}</strong><br /><small>{manager.email || manager.phone || '—'}</small></td>
                     <td><code>{manager.user_id}</code></td>
+                    <td>{roles.find((r) => r.code === manager.role_code)?.name || manager.role_code || 'Manager'}</td>
+                    <td>{manager.scope_state_id ? geoStates.find((s) => s.id === manager.scope_state_id)?.name || 'State scope' : 'Nationwide'}</td>
                     <td>{manager.all_stations ? 'All authorized' : manager.station_ids.length}</td>
                     <td>{manager.permissions.length}</td>
                     <td><Badge tone={manager.is_active ? 'success' : 'danger'}>{manager.is_active ? 'Active' : 'Inactive'}</Badge></td>
@@ -191,6 +230,33 @@ export default function Users() {
               <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Designation / Role</span>
+                <select value={form.role_code} onChange={(e) => setForm({ ...form, role_code: e.target.value })}>
+                  {roles.map((role) => <option key={role.code} value={role.code}>{role.name}</option>)}
+                </select>
+              </label>
+              <Input label="Staff ID" value={form.staff_id} onChange={(e) => setForm({ ...form, staff_id: e.target.value })} />
+              <Input label="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+              <Input label="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
+              <label className="field">
+                <span>Assigned State (geographic scope)</span>
+                <select value={form.scope_state_id} onChange={(e) => setForm({ ...form, scope_state_id: e.target.value, scope_lga_id: '' })}>
+                  <option value="">Nationwide / none</option>
+                  {geoStates.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span>Assigned LGA</span>
+                <select value={form.scope_lga_id} disabled={!form.scope_state_id} onChange={(e) => setForm({ ...form, scope_lga_id: e.target.value })}>
+                  <option value="">Whole state</option>
+                  {scopeLgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+            </div>
+
             {!editing && (
               <div className="form-grid">
                 <Input label="Initial password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />

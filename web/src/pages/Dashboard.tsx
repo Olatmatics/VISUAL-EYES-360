@@ -11,17 +11,22 @@ export default function Dashboard() {
   const [report, setReport] = useState<ReportsSummary | null>(null)
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [error, setError] = useState('')
+  const [threshold, setThreshold] = useState('—')
 
   useEffect(() => {
     Promise.all([
       api.get<DashboardSummary>('/dashboard/summary'),
       api.get<ReportsSummary>('/reports/summary').catch(() => null),
       api.get<AlertItem[]>('/alerts?unresolved_only=true&limit=5').catch(() => []),
+      api.get<Record<string, string | number>>('/system-settings').catch(() => ({} as Record<string, string | number>)),
     ])
-      .then(([s, r, a]) => {
+      .then(([s, r, a, settings]) => {
         setSummary(s)
         if (r) setReport(r)
         if (a) setAlerts(a)
+        if (settings.pump_discrepancy_threshold_l !== undefined) {
+          setThreshold(Number(settings.pump_discrepancy_threshold_l).toFixed(3))
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load dashboard'))
   }, [])
@@ -169,11 +174,11 @@ export default function Dashboard() {
         <Card>
           <h3>Forecourt Hardware & Network Architecture</h3>
           <div className="status-list">
-            <div><span>Forecourt devices</span><strong>FCC device assigned per nozzle</strong></div>
+            <div><span>FCC Controllers</span><strong>{summary?.fcc_online ?? 0} online / {summary?.fcc_offline ?? 0} offline</strong></div>
             <div><span>Tank telemetry</span><strong>Tank controller (Modbus RTU)</strong></div>
             <div><span>Network Standard</span><Badge tone="success">Wi-Fi 6 + 4G LTE SIM Only (Zero Ethernet)</Badge></div>
             <div><span>Payment Rule</span><Badge tone="info">No Verified Payment, No Dispensing</Badge></div>
-            <div><span>Discrepancy Threshold</span><strong>0.490 Litres</strong></div>
+            <div><span>Discrepancy Threshold</span><strong>{threshold} Litres</strong></div>
           </div>
         </Card>
 

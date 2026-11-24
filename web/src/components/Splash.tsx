@@ -44,8 +44,8 @@ export default function Splash({ onDone }: { onDone: () => void }) {
 
     // Fade the whole splash out after the minimum display time.
     const timer = window.setTimeout(() => {
-      $root.animate({ opacity: 0 }, 420, 'swing', finish)
-    }, 1900)
+      $root.animate({ opacity: 0 }, 460, 'swing', finish)
+    }, 2200)
 
     return () => {
       window.clearTimeout(timer)
@@ -90,7 +90,9 @@ export default function Splash({ onDone }: { onDone: () => void }) {
           <span />
         </div>
 
+        <div className="splash-progress" aria-hidden="true"><span className="splash-progress-fill" /></div>
         <p className="splash-tag">Fuel Station Automation &amp; Control</p>
+        <p className="splash-status">Establishing secure station link…</p>
       </div>
     </div>
   )

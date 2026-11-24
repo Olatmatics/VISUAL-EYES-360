@@ -3,7 +3,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.catalogue import MODULES
-from app.core.deps import require_permission, write_audit
+from app.core.deps import allowed_station_ids, require_permission, write_audit
 from app.core.security import hash_password
 from app.db.base import get_db
 from app.models.auth import (
@@ -16,7 +16,7 @@ from app.models.auth import (
     UserPermission,
     utcnow,
 )
-from app.models.core import Station
+from app.models.core import LGA, State, Station
 from app.schemas.user import ManagerCreate, ManagerOut, ManagerUpdate
 
 router = APIRouter(prefix="/api/v1", tags=["users"])
@@ -35,6 +35,12 @@ def _out(user: User) -> ManagerOut:
         permissions=sorted(user.permission_keys()),
         last_login_at=user.last_login_at,
         created_at=user.created_at,
+        role_code=user.role.code if user.role else None,
+        scope_state_id=user.scope_state_id,
+        scope_lga_id=user.scope_lga_id,
+        department=user.department,
+        position=user.position,
+        staff_id=user.staff_id,
     )
 
 
@@ -71,6 +77,52 @@ def _apply_stations(db: Session, user: User, station_ids: list[str]) -> None:
     user.stations = stations
 
 
+def _resolve_role(db: Session, actor: User, code: str | None) -> Role:
+    code = code or "MANAGER"
+    if code == "SUPERIOR_ADMIN" and not actor.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only the Superior Administrator can assign that role")
+    role = db.scalar(select(Role).where(Role.code == code))
+    if role is None:
+        raise HTTPException(status_code=400, detail=f"Unknown role: {code}")
+    return role
+
+
+def _validate_scope(db: Session, actor: User, state_id, lga_id, station_ids):
+    """Constrain a manager's assignments to the creator's own jurisdiction."""
+    if actor.scope_state_id and state_id and state_id != actor.scope_state_id:
+        raise HTTPException(status_code=403, detail="Cannot assign outside your state")
+    if actor.scope_lga_id and lga_id and lga_id != actor.scope_lga_id:
+        raise HTTPException(status_code=403, detail="Cannot assign outside your LGA")
+
+    state_id = actor.scope_state_id or state_id
+    lga_id = actor.scope_lga_id or lga_id
+    if lga_id:
+        lga = db.scalar(select(LGA).where(LGA.id == lga_id))
+        if lga is None:
+            raise HTTPException(status_code=400, detail="Unknown LGA")
+        if state_id and lga.state_id != state_id:
+            raise HTTPException(status_code=400, detail="LGA does not belong to the selected state")
+        state_id = lga.state_id
+    if state_id and db.scalar(select(State).where(State.id == state_id)) is None:
+        raise HTTPException(status_code=400, detail="Unknown state")
+
+    allowed = allowed_station_ids(actor)
+    if station_ids and allowed is not None:
+        outside = set(station_ids) - set(allowed)
+        if outside:
+            raise HTTPException(status_code=403, detail="Cannot assign stations outside your jurisdiction")
+    return state_id, lga_id
+
+
+@router.get("/users/roles")
+def list_roles(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permission("users", "view")),
+):
+    roles = db.scalars(select(Role).order_by(Role.name)).all()
+    return [{"id": role.id, "code": role.code, "name": role.name} for role in roles]
+
+
 @router.get("/users", response_model=list[ManagerOut])
 def list_users(
     db: Session = Depends(get_db),
@@ -89,9 +141,10 @@ def create_manager(
 ):
     if db.scalar(select(User).where(func.lower(User.user_id) == payload.manager_id.lower())):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Manager ID already exists")
-    role = db.scalar(select(Role).where(Role.code == "MANAGER"))
-    if role is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Manager role missing")
+    role = _resolve_role(db, actor, payload.role_code)
+    state_id, lga_id = _validate_scope(
+        db, actor, payload.scope_state_id, payload.scope_lga_id, payload.station_ids
+    )
 
     manager = User(
         user_id=payload.manager_id,
@@ -99,6 +152,11 @@ def create_manager(
         role_id=role.id,
         phone=payload.phone,
         email=payload.email,
+        staff_id=payload.staff_id,
+        department=payload.department,
+        position=payload.position,
+        scope_state_id=state_id,
+        scope_lga_id=lga_id,
         password_hash=hash_password(payload.password),
         is_active=payload.is_active,
         all_stations=payload.all_stations,
@@ -147,6 +205,23 @@ def update_user(
         _apply_permissions(db, user, payload.permissions)
     if payload.station_ids is not None:
         _apply_stations(db, user, payload.station_ids)
+    if payload.role_code is not None:
+        user.role = _resolve_role(db, actor, payload.role_code)
+    if payload.department is not None:
+        user.department = payload.department
+    if payload.position is not None:
+        user.position = payload.position
+    if payload.staff_id is not None:
+        user.staff_id = payload.staff_id
+    if payload.scope_state_id is not None or payload.scope_lga_id is not None:
+        state_id, lga_id = _validate_scope(
+            db,
+            actor,
+            payload.scope_state_id if payload.scope_state_id is not None else user.scope_state_id,
+            payload.scope_lga_id if payload.scope_lga_id is not None else user.scope_lga_id,
+            payload.station_ids or [s.id for s in user.stations],
+        )
+        user.scope_state_id, user.scope_lga_id = state_id, lga_id
     user.updated_at = utcnow()
     db.flush()
     write_audit(db, actor, "UPDATE_MANAGER", "User", user.id, before=before, after=_out(user).model_dump(), request=request)

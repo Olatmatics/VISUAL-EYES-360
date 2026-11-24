@@ -51,6 +51,12 @@ def _user_context(user: User) -> UserContext:
         stations=[station.id for station in user.stations],
         all_stations=user.all_stations,
         must_change_password=user.must_change_password,
+        role_code=user.role.code if user.role else None,
+        scope_state_id=user.scope_state_id,
+        scope_lga_id=user.scope_lga_id,
+        department=user.department,
+        position=user.position,
+        staff_id=user.staff_id,
     )
 
 

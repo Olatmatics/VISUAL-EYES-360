@@ -9,9 +9,9 @@ Industrial IoT fuel-station automation, cashless dispensing, independent pulser 
 | # | Constraint |
 |---|---|
 | 1 | Controller WAN is **Wi-Fi + SIM cellular only**. No Ethernet, LAN cable, switch or Ethernet backup anywhere in the controller network. |
-| 2 | **One ESP32-S3 FCC per nozzle.** No shared controller across nozzles. |
-| 3 | **One ESP32 tank controller per tank.** No shared controller across tanks. |
-| 4 | STM32 is optional, never the main controller. Touchscreen stays directly on the ESP32-S3. |
+| 2 | **One FCC Controller per nozzle.** No shared controller across nozzles. |
+| 3 | **One FCC tank controller per tank.** No shared controller across tanks. |
+| 4 | The touchscreen stays directly on the FCC Controller; no separate main controller is used. |
 | 5 | **No verified payment → no dispensing.** Screenshots, receipts, messages and pending statuses never authorize fuel. |
 | 6 | Dispenser CPU performs normal preset control/cutoff. The independent pulser is for measurement and investigation only — never a replacement. |
 | 7 | Backend is the sole authority for identity, RBAC, station scope, wallet balances, payments and dispensing authorization. |
@@ -36,8 +36,8 @@ visual-eyes-360/
 │   ├── api/            # generated API reference (Phase 6)
 │   └── security/       # threat model, hardening (Phase 1+)
 ├── firmware/
-│   ├── fcc/            # ESP32-S3 FCC firmware (Phase 4)
-│   ├── tank/           # ESP32 tank controller firmware (Phase 5)
+│   ├── fcc/            # FCC Controller firmware (Phase 4)
+│   ├── tank/           # FCC tank controller firmware (Phase 5)
 │   └── stm32/          # only if Phase 1 review approves it
 ├── hardware/           # schematics, pin tables, enclosure, BOM detail
 ├── backend/            # FastAPI service, migrations, MQTT bridge
@@ -116,7 +116,7 @@ The initial Linode Docker Compose deployment, PostgreSQL, HTTPS reverse proxy, s
 - Per-device FCC/tank-controller bearer credentials, authenticated telemetry ingestion, event idempotency, and append-only tank readings.
 - Wallet funding requires a verified, customer-bound funding payment; sandbox payment references remain unverified and cannot authorize fuel.
 - React + TypeScript responsive web app with theme toggle, route guards, permission-driven navigation and a refresh-on-401 API client.
-- Full management screens: dashboard, forecourt/dispensers/nozzles, ESP32-S3 FCC controllers, ATG tanks, fuel transactions, pulser reconciliation, tank reconciliation, OPay/POS payments, RFID wallets, fleets, price management, alerts, reports, users and audit log.
+- Full management screens: dashboard, forecourt/dispensers/nozzles, FCC Controllers, ATG tanks, fuel transactions, pulser reconciliation, tank reconciliation, OPay/POS payments, RFID wallets, fleets, price management, alerts, reports, users and audit log.
 - **App-entry splash animation** — jQuery-driven fuel nozzle gliding left→right with a three-dot loader and the AUTOMATION brand mark (`web/src/components/Splash.tsx`).
 - **PWA manifest + icons** — installable to home screen / app-like standalone window.
 - One-click launcher: `start.ps1` starts backend (8000) and web (5173) together.
@@ -138,14 +138,14 @@ npm run build                                       # -> tsc --noEmit && vite bu
 
 - PostgreSQL production configuration, Redis token denylist, MQTT/SSE device transport.
 - OPay/POS live credentials and callbacks (sandbox mock is implemented), verified bank-transfer provider.
-- ESP32-S3 firmware, STM32 decision, electrical/safety design, native Android APK, and all items in `docs/08-open-items.md`.
+- FCC Controller firmware, electrical/safety design, native Android APK, and all items in `docs/08-open-items.md`.
 
 ## Backend recommendation
 
 The backend is **FastAPI (Python) + SQLAlchemy**, which is the right long-term choice for this product:
 
 - **Why keep it:** async-friendly, typed, auto-generates the `/docs` OpenAPI reference the firmware and Android teams will consume, and SQLAlchemy lets you run SQLite today and switch to PostgreSQL for production by changing one `DATABASE_URL`.
-- **Production path:** PostgreSQL 17 + Redis (JWT denylist, rate limiting) + MQTT broker for ESP32-S3 device transport. Same code, no rewrite.
+- **Production path:** PostgreSQL 17 + Redis (JWT denylist, rate limiting) + MQTT broker for FCC Controller device transport. Same code, no rewrite.
 - **When to reconsider:** only if you need heavy real-time WebSocket fan-out at massive scale — then add a Node/Go gateway in front, but keep FastAPI as the system of record for RBAC, wallet and dispensing authorization.
 
 Do **not** move the authority for identity, RBAC, wallet balances or dispensing authorization off this backend — that is a non-negotiable constraint (README #7).

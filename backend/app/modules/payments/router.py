@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc, select
@@ -160,3 +161,36 @@ def simulate_opay_checkout(
         "authorization_token": None,
         "message": "Development sandbox only. No real payment was verified.",
     }
+
+
+@router.post("/sandbox/verify")
+def verify_sandbox_payment(
+    payload: dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("payments", "approve")),
+):
+    """Development-only: mark a sandbox payment VERIFIED for end-to-end testing.
+
+    Production rejects this endpoint. Real provider callbacks are added when
+    the OPay/bank integration documentation is supplied (see 08-open-items.md).
+    """
+    if settings.ENVIRONMENT.lower() in {"production", "prod", "live"}:
+        raise HTTPException(status_code=404, detail="Sandbox endpoint unavailable")
+    reference = str(payload.get("payment_reference") or payload.get("reference") or "")
+    record = db.scalar(select(PaymentRecord).where(PaymentRecord.reference == reference))
+    if record is None:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+    if record.status == "VERIFIED":
+        return {"status": "VERIFIED", "payment_reference": record.reference, "already_verified": True}
+    if record.status != "INITIATED":
+        raise HTTPException(status_code=409, detail=f"Payment is {record.status}, cannot verify")
+    before = {"status": record.status}
+    record.status = "VERIFIED"
+    record.authorized_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    write_audit(db, user, "SANDBOX_VERIFY_PAYMENT", "PaymentRecord", record.id,
+                before=before, after={"status": "VERIFIED"}, request=request)
+    db.commit()
+    return {"status": "VERIFIED", "payment_reference": record.reference,
+            "amount": record.amount, "dispensing_authorized": True,
+            "message": "Development sandbox verification only."}

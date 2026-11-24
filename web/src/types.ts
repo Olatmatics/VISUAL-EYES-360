@@ -8,6 +8,12 @@ export interface UserContext {
   stations: string[]
   all_stations: boolean
   must_change_password: boolean
+  role_code?: string | null
+  scope_state_id?: string | null
+  scope_lga_id?: string | null
+  department?: string | null
+  position?: string | null
+  staff_id?: string | null
 }
 
 export interface LoginResponse {
@@ -80,7 +86,11 @@ export interface Manager {
   user_id: string
   full_name: string
   role?: string
+  role_code?: string | null
   role_name?: string
+  department?: string | null
+  position?: string | null
+  staff_id?: string | null
   phone: string | null
   email: string | null
   is_active: boolean
@@ -94,9 +104,10 @@ export interface Manager {
 }
 
 export interface RoleOption {
+  id?: string
   code: string
   name: string
-  level: number
+  level?: number
   permission_count?: number
 }
 
@@ -119,6 +130,9 @@ export interface DashboardSummary {
   total_volume_l?: number
   discrepancy_count?: number
   active_alerts?: number
+  fcc_total?: number
+  fcc_online?: number
+  fcc_offline?: number
 }
 
 export interface PermissionModule {

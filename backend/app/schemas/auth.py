@@ -76,3 +76,9 @@ class UserContext(BaseModel):
     stations: list[str]
     all_stations: bool
     must_change_password: bool = False
+    role_code: str | None = None
+    scope_state_id: str | None = None
+    scope_lga_id: str | None = None
+    department: str | None = None
+    position: str | None = None
+    staff_id: str | None = None

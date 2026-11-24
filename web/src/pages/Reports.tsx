@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, downloadFile } from '../api/client'
 import { Button, Card, ErrorBanner, PageHeader } from '../components/ui'
 import type { ReportsSummary } from '../types'
 
@@ -7,6 +7,7 @@ export default function Reports() {
   const [data, setData] = useState<ReportsSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [datasets, setDatasets] = useState<{ name: string; module: string }[]>([])
 
   const load = () => {
     setLoading(true)
@@ -16,7 +17,16 @@ export default function Reports() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+    api.get<{ name: string; module: string }[]>('/reports/export/datasets')
+      .then(setDatasets)
+      .catch(() => setDatasets([]))
+  }, [])
+
+  const exportDataset = (name: string, fmt: 'csv' | 'xlsx') =>
+    downloadFile(`/reports/export/${name}?fmt=${fmt}`, `ve360-${name}.${fmt}`)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Export failed'))
 
   const exportCSV = () => {
     if (!data) return
@@ -147,6 +157,26 @@ export default function Reports() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <h3 style={{ marginBottom: '4px' }}>📤 Operational Data Exports</h3>
+        <p className="muted" style={{ fontSize: '13px', marginTop: 0 }}>
+          Live records exported from the database with your station and geographic access applied.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px' }}>
+          {datasets.map((dataset) => (
+            <div key={dataset.name} className="export-row">
+              <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>{dataset.name.replace(/-/g, ' ')}</span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                  onClick={() => exportDataset(dataset.name, 'csv')}>CSV</Button>
+                <Button variant="secondary" style={{ padding: '4px 10px', fontSize: '12px' }}
+                  onClick={() => exportDataset(dataset.name, 'xlsx')}>Excel</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </>
   )
 }

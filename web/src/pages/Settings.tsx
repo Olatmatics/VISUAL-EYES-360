@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
-import { Badge, Button, Card, Input, PageHeader } from '../components/ui'
+import { Badge, Button, Card, ErrorBanner, Input, PageHeader } from '../components/ui'
 
 export default function Settings() {
   const { user } = useAuth()
@@ -9,6 +10,18 @@ export default function Settings() {
   const [threshold, setThreshold] = useState('0.490')
   const [connPriority, setConnPriority] = useState('WIFI_PRIMARY')
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.get<Record<string, string | number>>('/system-settings')
+      .then((data) => {
+        if (data.carrier_preset) setApnCarrier(String(data.carrier_preset))
+        if (data.apn) setCustomApn(String(data.apn))
+        if (data.pump_discrepancy_threshold_l !== undefined) setThreshold(String(data.pump_discrepancy_threshold_l))
+        if (data.network_priority) setConnPriority(String(data.network_priority))
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load settings'))
+  }, [])
 
   const handleCarrierChange = (c: string) => {
     setApnCarrier(c)
@@ -18,10 +31,21 @@ export default function Settings() {
     else if (c === '9mobile') setCustomApn('9mobile')
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setError('')
+    try {
+      await api.put('/system-settings', {
+        network_priority: connPriority,
+        carrier_preset: apnCarrier,
+        apn: customApn,
+        pump_discrepancy_threshold_l: Number(threshold),
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings')
+    }
   }
 
   return (
@@ -31,9 +55,10 @@ export default function Settings() {
         subtitle="Manage telecommunication APNs, network priority policies, pulser calibration thresholds and security configurations"
       />
 
+      {error && <ErrorBanner message={error} />}
       {saved && (
         <div style={{ background: 'rgba(22, 146, 91, 0.12)', border: '1px solid var(--success)', padding: '12px 16px', borderRadius: '8px', color: 'var(--success)', marginBottom: '16px', fontSize: '13px', fontWeight: 600 }}>
-          ✓ Telemetry and hardware settings saved and synced to forecourt edge controllers.
+          ✓ Settings saved to the platform database. Controllers apply network policy on their next configuration sync.
         </div>
       )}
 

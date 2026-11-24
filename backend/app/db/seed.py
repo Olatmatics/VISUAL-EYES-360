@@ -1,6 +1,6 @@
 """
 VISUAL EYES 360 — Complete Production Seed Script
-Seeds stations, dual-hose Wayne dispensers, dedicated ESP32-S3 FCCs,
+Seeds stations, dual-hose Wayne dispensers, dedicated FCC Controllers,
 ATG tanks, POS terminals, transactions with dual pulser verification,
 special customer RFID wallets, and security alerts.
 """
@@ -118,9 +118,9 @@ def seed():
             db.add_all([tank_pms_abj, tank_ago_abj])
             db.flush()
 
-            # Dedicated ESP32 Tank Controllers (1 per tank)
+            # Dedicated FCC Tank Controllers (1 per tank)
             db.add(TankController(
-                device_uid="TC-ESP32-ABJ-T1",
+                device_uid="TC-FCC-ABJ-T1",
                 tank_id=tank_pms_abj.id,
                 connection_mode="WIFI",
                 signal_strength_dbm=-64,
@@ -128,7 +128,7 @@ def seed():
                 is_online=True,
             ))
             db.add(TankController(
-                device_uid="TC-ESP32-ABJ-T2",
+                device_uid="TC-FCC-ABJ-T2",
                 tank_id=tank_ago_abj.id,
                 connection_mode="SIM",
                 signal_strength_dbm=-71,
@@ -173,11 +173,11 @@ def seed():
             db.add_all([nozzle1, nozzle2])
             db.flush()
 
-            # ONE Dedicated ESP32-S3 FCC PER NOZZLE
+            # ONE Dedicated FCC Controller PER NOZZLE
             db.add(FCCDevice(
                 device_uid="FCC-S3-ABJ-D1-N1",
                 nozzle_id=nozzle1.id,
-                firmware_version="v1.0.4-esp32s3",
+                firmware_version="v1.0.4-fcc",
                 connection_mode="WIFI",
                 signal_strength_dbm=-62,
                 calibration_factor=100.0,
@@ -186,7 +186,7 @@ def seed():
             db.add(FCCDevice(
                 device_uid="FCC-S3-ABJ-D1-N2",
                 nozzle_id=nozzle2.id,
-                firmware_version="v1.0.4-esp32s3",
+                firmware_version="v1.0.4-fcc",
                 connection_mode="SIM",
                 signal_strength_dbm=-69,
                 calibration_factor=100.0,
@@ -246,7 +246,7 @@ def seed():
             db.flush()
 
             db.add(TankController(
-                device_uid="TC-ESP32-LAG-T1",
+                device_uid="TC-FCC-LAG-T1",
                 tank_id=tank_pms_lag.id,
                 connection_mode="SIM",
                 signal_strength_dbm=-75,
@@ -283,7 +283,7 @@ def seed():
             db.add(FCCDevice(
                 device_uid="FCC-S3-LAG-D1-N1",
                 nozzle_id=nozzle_lag.id,
-                firmware_version="v1.0.4-esp32s3",
+                firmware_version="v1.0.4-fcc",
                 connection_mode="SIM",
                 signal_strength_dbm=-74,
                 calibration_factor=100.0,

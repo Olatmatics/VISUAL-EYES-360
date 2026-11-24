@@ -86,10 +86,29 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}, retry
   return (await response.json()) as T
 }
 
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const { access } = tokens()
+  const headers = new Headers()
+  if (access) headers.set('Authorization', `Bearer ${access}`)
+  const response = await fetch(`${API}${path}`, { headers })
+  if (!response.ok) throw new Error(`Export failed (${response.status})`)
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
 }
