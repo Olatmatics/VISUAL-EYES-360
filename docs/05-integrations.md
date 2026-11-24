@@ -82,16 +82,41 @@ Levels: nozzle, dispenser, station, selected stations, all stations. Role-permis
 
 Types include payment failure/timeout, unauthorized dispensing attempt, unregistered/blocked RFID, low wallet, pump/FCC/tank-controller offline, tank low/high/water, cover open, pulser discrepancy, tank variance, price mismatch, comms failures, power interruption, restart, storage/sensor failure, suspicious transaction, tampering. Each alert has severity, acknowledgement, assignment, investigation, resolution, and in-app plus approved email/SMS/push delivery.
 
-## 6. What is implemented vs. blocked in Phase 1
+## 6. Device ingestion API status
+
+The backend exposes a limited authenticated telemetry path:
+
+- `POST /api/v1/device-ingest/provision/fcc/{fcc_id}` and
+  `POST /api/v1/device-ingest/provision/tank/{controller_id}` rotate a
+  per-device bearer credential. The raw credential is returned once; only its
+  SHA-256 hash is stored. Provisioning is permission- and station-scoped and
+  is audit-logged.
+- `POST /api/v1/device-ingest/fcc/{device_uid}/heartbeat` accepts identified,
+  timestamped FCC health events.
+- `POST /api/v1/device-ingest/tank/{device_uid}/reading` accepts timestamped
+  tank telemetry, stores immutable reading history, uses a configured
+  strapping chart when available, and labels device-reported volume otherwise.
+- Event IDs are idempotent per device. Reusing an event ID with a different
+  payload is rejected. Out-of-order readings are retained in history without
+  replacing the current tank snapshot.
+- Device timestamps must include a timezone, cannot be too far in the future,
+  and offline replay is limited by `DUPLICATE_WINDOW_MINUTES`.
+
+This is an API foundation, not a validated hardware integration. Production
+deployment still requires TLS, device firmware implementation, physical
+hardware tests, and vendor-confirmed sensor/protocol details. Credentials
+must be provisioned over a trusted channel and rotated if exposed.
+
+## 7. What is implemented vs. blocked
 
 | Area | Status | Note |
 |---|---|---|
 | Architecture, workflows, schemas, UI designs | Designed | This document set. |
-| OPay live/payment integration | Not implemented | Needs official docs, credentials, sandbox, terminal capabilities. |
+| OPay live/payment integration | Not implemented | Needs official docs, credentials, sandbox, terminal capabilities. Sandbox records remain unverified. |
 | Wayne/Gilbarco/Tatsuno commands | Not implemented | Needs exact model + protocol docs. |
 | Modem APN/bands | Not selected | Needs modem model + Nigerian operator confirmation. |
 | ATG probe registers | Not defined | Needs probe model + Modbus map. |
-| RFID secure auth | Not selected | Needs card technology decision. |
-| Nigerian states/LGA dataset | Not loaded | Needs authoritative source. |
+| RFID secure auth | Disabled | Needs card technology decision and secure challenge-response implementation. |
+| Nigerian states/LGA dataset | Loaded in application | Dataset provenance and authoritative verification remain required. |
 
 No simulation is presented as real integration. Simulation drivers will be labelled as such in code and tests.

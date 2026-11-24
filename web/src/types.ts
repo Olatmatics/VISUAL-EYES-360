@@ -18,29 +18,94 @@ export interface LoginResponse {
   user: UserContext
 }
 
+export interface GeoState {
+  id: string
+  name: string
+  code: string | null
+  lga_count: number
+}
+
+export interface GeoLga {
+  id: string
+  name: string
+  state_id: string
+}
+
+export interface FuelProduct {
+  id: string
+  code: string
+  name: string
+}
+
+export interface PumpType {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  is_active: boolean
+}
+
 export interface Station {
   id: string
   code: string
   name: string
+  company_name?: string | null
   address: string | null
+  country?: string
+  state_id?: string | null
+  lga_id?: string | null
+  state_name?: string | null
+  lga_name?: string | null
   city: string | null
+  gps_lat?: string | null
+  gps_lng?: string | null
+  manager_name?: string | null
+  manager_phone?: string | null
+  manager_email?: string | null
+  supervisor_name?: string | null
+  supervisor_phone?: string | null
+  supervisor_email?: string | null
+  contact_person?: string | null
   phone: string | null
+  email?: string | null
+  notes?: string | null
   status: string
   registered_at: string
+  dispenser_count?: number
+  tank_count?: number
 }
 
 export interface Manager {
   id: string
   user_id: string
   full_name: string
+  role?: string
+  role_name?: string
   phone: string | null
   email: string | null
   is_active: boolean
   all_stations: boolean
   station_ids: string[]
+  scope_state_id?: string | null
+  scope_lga_id?: string | null
   permissions: string[]
   last_login_at: string | null
   created_at: string
+}
+
+export interface RoleOption {
+  code: string
+  name: string
+  level: number
+  permission_count?: number
+}
+
+export interface GeoOverview {
+  states: number
+  lgas: number
+  stations: number
+  states_with_stations: number
+  lgas_with_stations: number
 }
 
 export interface DashboardSummary {
@@ -62,31 +127,44 @@ export interface PermissionModule {
   actions: string[]
 }
 
+export interface DispenserNozzle {
+  id: string
+  number: number
+  name?: string | null
+  price: number
+  status: string
+  tank_id: string | null
+  tank_code?: string | null
+  product_id?: string | null
+  product_code: string
+  fcc_device_id: string | null
+  fcc_uid: string | null
+  fcc_online: boolean
+  pos_terminal_id: string | null
+}
+
 export interface DispenserItem {
   id: string
   station_id: string
   station_name: string
   code: string
+  name?: string | null
   manufacturer: string
+  custom_manufacturer?: string | null
+  brand?: string
   model: string
+  pump_type_id?: string | null
+  pump_type_name?: string | null
+  nozzle_config?: string
+  nozzle_count?: number
   protocol: string
   interface: string
   serial: string
   status: string
+  communication_status?: string
+  installation_date?: string | null
   totalizer_l: number
-  nozzle_count: number
-  nozzles: {
-    id: string
-    number: number
-    price: number
-    status: string
-    tank_id: string | null
-    product_code: string
-    fcc_device_id: string | null
-    fcc_uid: string | null
-    fcc_online: boolean
-    pos_terminal_id: string | null
-  }[]
+  nozzles: DispenserNozzle[]
 }
 
 export interface NozzleItem {
@@ -118,16 +196,51 @@ export interface NozzleItem {
 export interface FCCDeviceItem {
   id: string
   device_uid: string
+  name?: string | null
+  serial_number?: string | null
   nozzle_id: string
   nozzle_number: number
-  dispenser_code: string
+  station_id?: string | null
   station_name: string
+  dispenser_id?: string | null
+  dispenser_code: string
+  pos_terminal_id?: string | null
+  pos_terminal_code?: string | null
+  protocol?: string | null
+  ip_address?: string | null
+  mac_address?: string | null
+  sim_info?: string | null
+  hardware_version?: string | null
   firmware_version: string
   connection_mode: string
   signal_strength_dbm: number
   calibration_factor: number
   is_online: boolean
+  status?: string
+  installation_date?: string | null
   last_heartbeat: string | null
+  temperature_c?: number | null
+  power_status?: string | null
+  hardware_fault?: string | null
+  communication_errors?: number
+}
+
+export interface TankSensorItem {
+  id: string
+  sensor_type: string
+  label: string | null
+  is_installed: boolean
+  is_enabled: boolean
+  status: string
+  last_reading_at: string | null
+  notes: string | null
+}
+
+export interface TankCalibrationItem {
+  id?: string
+  height_mm: number
+  volume_l: number
+  water_mm?: number
 }
 
 export interface TankItem {
@@ -135,6 +248,8 @@ export interface TankItem {
   station_id: string
   station_name: string
   code: string
+  name?: string | null
+  serial_number?: string | null
   product_code: string
   product_name: string
   capacity_l: number
@@ -146,6 +261,23 @@ export interface TankItem {
   fill_percentage: number
   hatch_open: boolean
   status: string
+  location_type?: string
+  position?: string | null
+  dimensions?: string | null
+  probe_id?: string | null
+  probe_comm_type?: string | null
+  monitoring_device?: string | null
+  has_temperature_sensor?: boolean
+  has_temperature_switch?: boolean
+  has_tamper_switch?: boolean
+  has_lid_limit_switch?: boolean
+  has_high_level_switch?: boolean
+  has_low_level_switch?: boolean
+  has_water_detection?: boolean
+  sensors?: TankSensorItem[]
+  calibration?: TankCalibrationItem[]
+  calibration_count?: number
+  volume_from_calibration_l?: number | null
   controller: {
     id: string
     device_uid: string
@@ -298,18 +430,45 @@ export interface PriceHistoryItem {
 
 export interface AlertItem {
   id: string
+  alert_ref?: string
   station_id: string | null
   station_name: string
+  category?: string
   alert_type: string
   severity: string
   title: string
   description: string
   entity_type: string | null
   entity_id: string | null
+  device_type?: string | null
+  device_id?: string | null
+  expected_value?: number | null
+  actual_value?: number | null
+  discrepancy?: number | null
+  state_id?: string | null
+  lga_id?: string | null
+  status?: string
+  assigned_to?: string | null
+  escalated?: boolean
+  acknowledged_by?: string | null
+  acknowledged_at?: string | null
+  resolution_notes?: string | null
   is_resolved: boolean
   resolved_by: string | null
   created_at: string
   resolved_at: string | null
+  updated_at?: string | null
+}
+
+export interface AlertSummary {
+  total: number
+  unresolved: number
+  critical: number
+  high: number
+  by_category: { category: string; count: number }[]
+  by_severity: { severity: string; count: number }[]
+  by_state: { state: string; count: number }[]
+  avg_resolution_hours?: number
 }
 
 export interface ReportsSummary {
@@ -339,4 +498,48 @@ export interface ReportsSummary {
     compliance_rate_percent: number
     active_unresolved_alerts: number
   }
+}
+
+export interface RevenuePoint {
+  label: string
+  revenue_ngn: number
+  volume_l: number
+  transactions: number
+}
+
+export interface AnalyticsOverview {
+  scope: string
+  stations: number
+  active_stations: number
+  dispensers: number
+  nozzles: number
+  tanks: number
+  fcc_online: number
+  fcc_total: number
+  transactions: number
+  revenue_ngn: number
+  volume_l: number
+  discrepancy_incidents: number
+  open_alerts: number
+  stock_l: number
+  capacity_l: number
+  revenue_today_ngn?: number
+  revenue_7d_ngn?: number
+  revenue_30d_ngn?: number
+  trend?: RevenuePoint[]
+  by_product?: { code: string; volume_l: number; revenue_ngn: number }[]
+  by_payment?: { channel: string; revenue_ngn: number }[]
+  by_state?: { state: string; stations: number; revenue_ngn: number; volume_l: number }[]
+}
+
+export interface IngestEventItem {
+  id: string
+  device_uid: string
+  device_type: string
+  station_id: string | null
+  event_type: string
+  processing_status: string
+  device_timestamp: string | null
+  received_at: string
+  detail: string | null
 }

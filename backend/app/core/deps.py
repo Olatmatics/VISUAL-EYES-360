@@ -1,10 +1,10 @@
-from collections.abc import Callable, Generator
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.security import decode_token
 from app.db.base import get_db
@@ -79,9 +79,65 @@ def require_super_admin(user: User = Depends(get_current_user)) -> User:
 
 
 def allowed_station_ids(user: User) -> list[str] | None:
+    """Station ids this user may touch.
+
+    ``None`` means national (unrestricted) access. Otherwise the result is the
+    union of explicitly assigned stations and every station inside the user's
+    geographic scope (state or LGA).
+    """
     if user.is_super_admin or user.all_stations:
         return None
-    return [station.id for station in user.stations]
+
+    ids = {station.id for station in user.stations}
+    if user.scope_state_id or user.scope_lga_id:
+        session = object_session(user)
+        if session is not None:
+            from app.models.core import Station
+
+            query = select(Station.id)
+            if user.scope_lga_id:
+                query = query.where(Station.lga_id == user.scope_lga_id)
+            elif user.scope_state_id:
+                query = query.where(Station.state_id == user.scope_state_id)
+            ids |= set(session.scalars(query).all())
+    return sorted(ids)
+
+
+def allowed_state_ids(user: User) -> list[str] | None:
+    """State ids visible to the user. ``None`` means national access."""
+    if user.is_super_admin or user.all_stations:
+        return None
+    if user.scope_state_id and not user.scope_lga_id:
+        return [user.scope_state_id]
+    session = object_session(user)
+    station_ids = allowed_station_ids(user) or []
+    if session is None:
+        return []
+    from app.models.core import Station
+
+    if not station_ids:
+        return []
+    return sorted(
+        {
+            row
+            for row in session.scalars(
+                select(Station.state_id).where(Station.id.in_(station_ids), Station.state_id.is_not(None))
+            ).all()
+            if row
+        }
+    )
+
+
+def scoped_station_or_404(db: Session, user: User, station_id: str):
+    from app.models.core import Station
+
+    station = db.scalar(select(Station).where(Station.id == station_id))
+    if station is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Station not found")
+    allowed = allowed_station_ids(user)
+    if allowed is not None and station.id not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Station access denied")
+    return station
 
 
 def write_audit(

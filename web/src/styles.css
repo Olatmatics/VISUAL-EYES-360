@@ -52,6 +52,67 @@ small { color: var(--muted); }
 .muted { color: var(--muted); }
 .hint { color: var(--muted); font-size: 12px; margin: 4px 0 12px; }
 
+/* ---------- Splash (app entry animation) ---------- */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 35%, #16558a 0%, #0b1b2b 55%, #06111d 100%);
+  color: #eaf3fb;
+}
+.splash-inner { display: grid; justify-items: center; gap: 22px; padding: 24px; }
+.splash-logo { display: flex; align-items: center; gap: 14px; }
+.splash-mark {
+  width: 54px; height: 54px; border-radius: 14px;
+  background: linear-gradient(135deg, #22b8a6, #0f6fbd);
+  display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 19px;
+  box-shadow: 0 10px 30px rgba(34, 184, 166, 0.35);
+}
+.splash-brand { display: grid; line-height: 1.25; }
+.splash-brand strong { font-size: 21px; letter-spacing: 0.06em; }
+.splash-brand span {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.42em;
+  color: #f0b429; text-transform: uppercase;
+}
+/* Track the fuel nozzle travels along */
+.splash-track {
+  position: relative;
+  width: 260px; height: 46px;
+  border-bottom: 2px dashed rgba(159, 191, 219, 0.35);
+  overflow: hidden;
+}
+.splash-nozzle { position: absolute; left: -70px; bottom: 2px; opacity: 0; }
+.splash-drip {
+  position: absolute; right: -4px; top: 22px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #f0b429;
+  animation: splash-drip 0.7s linear infinite;
+}
+@keyframes splash-drip {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(16px) scale(0.5); opacity: 0; }
+}
+/* Three pulsing dots */
+.splash-dots { display: flex; gap: 10px; }
+.splash-dots span {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #22b8a6;
+  animation: splash-dot 1.05s ease-in-out infinite;
+}
+.splash-dots span:nth-child(2) { animation-delay: 0.18s; background: #4aa3ec; }
+.splash-dots span:nth-child(3) { animation-delay: 0.36s; background: #f0b429; }
+@keyframes splash-dot {
+  0%, 100% { transform: translateY(0) scale(0.75); opacity: 0.45; }
+  50%      { transform: translateY(-9px) scale(1);   opacity: 1; }
+}
+.splash-tag { color: #9fbfdb; font-size: 12px; letter-spacing: 0.08em; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-dots span, .splash-drip { animation: none; }
+}
+
 /* ---------- Auth pages ---------- */
 .auth-page { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100vh; }
 .auth-visual {

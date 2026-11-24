@@ -26,7 +26,7 @@ export default function Transactions() {
     <>
       <PageHeader
         title="Fuel Transactions & Dual-Measurement Journal"
-        subtitle="Cryptographically verified dispensing records with CPU volume, independent pulser volume and payment linkage"
+        subtitle="Verified dispensing records with CPU volume, independent pulser volume and payment linkage"
         action={
           <div style={{ display: 'flex', gap: '8px' }}>
             <Button

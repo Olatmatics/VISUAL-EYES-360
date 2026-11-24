@@ -198,7 +198,7 @@ export default function Tanks() {
               onChange={(e) => setForm({ ...form, initial_volume_l: e.target.value })}
               required
             />
-            <Button type="submit">Create Storage Tank & Provision ESP32 Controller</Button>
+            <Button type="submit">Create Storage Tank</Button>
           </form>
         </Modal>
       )}

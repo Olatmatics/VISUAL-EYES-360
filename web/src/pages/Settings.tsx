@@ -41,7 +41,7 @@ export default function Settings() {
         <Card>
           <h3 style={{ marginBottom: '12px' }}>📶 Zero-Ethernet Telemetry & Wireless Carrier APN</h3>
           <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 14px' }}>
-            In strict compliance with <strong>Section 2 (Networking Requirement)</strong>, all ESP32-S3 FCCs and Tank Controllers communicate via <strong>Wi-Fi</strong> and <strong>SIM cellular</strong> only. Physical Ethernet is strictly excluded.
+            FCC devices and tank controllers communicate via <strong>Wi-Fi</strong> and <strong>SIM cellular</strong> only. Physical Ethernet is not supported.
           </p>
 
           <form onSubmit={handleSave} style={{ display: 'grid', gap: '14px' }}>

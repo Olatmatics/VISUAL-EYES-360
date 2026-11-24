@@ -6,9 +6,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 from app.core.deps import allowed_station_ids, get_current_user, require_permission
+from app.core.config import settings
+from app.core.validation import parse_float
 from app.db.base import get_db
 from app.models.auth import User
-from app.models.core import Dispenser, FuelTransaction, Nozzle, PaymentRecord, SystemAlert, Tank
+from app.models.core import (
+    Dispenser,
+    FuelTransaction,
+    Nozzle,
+    PaymentRecord,
+    SystemAlert,
+    Tank,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["transactions"])
 
@@ -65,7 +74,11 @@ def list_transactions(
 
 
 @router.post("/transactions/simulate-dispense", status_code=status.HTTP_201_CREATED)
-def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def simulate_dispense(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("transactions", "create")),
+):
     """
     Executes a realistic physical dispensing cycle:
     1. Validates Payment (Rule: NO VERIFIED PAYMENT, NO DISPENSING)
@@ -74,6 +87,8 @@ def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), us
     4. Computes Delta = |CPU - Pulser|
     5. Flags CRITICAL_DISCREPANCY if Delta >= 0.49 Litres
     """
+    if settings.ENVIRONMENT.lower() in {"production", "prod", "live"}:
+        raise HTTPException(status_code=404, detail="Sandbox dispensing unavailable")
     nozzle_id = payload.get("nozzle_id")
     nozzle = db.scalar(select(Nozzle).where(Nozzle.id == nozzle_id))
     if not nozzle:
@@ -83,10 +98,45 @@ def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), us
     if allowed is not None and nozzle.dispenser.station_id not in allowed:
         raise HTTPException(status_code=403, detail="Station out of scope")
 
-    payment_channel = payload.get("payment_channel", "OPAY_POS")
-    requested_amount = float(payload.get("requested_amount", 5000.0))
-    unit_price = nozzle.price if nozzle.price > 0 else 850.0
+    payment_channel = str(payload.get("payment_channel") or "").upper()
+    if payment_channel == "RFID_WALLET":
+        raise HTTPException(
+            status_code=409,
+            detail="RFID dispensing requires secure card authentication and is not enabled in the sandbox",
+        )
+    if payment_channel not in {"OPAY_POS", "BANK_TRANSFER"}:
+        raise HTTPException(status_code=400, detail="Unsupported payment channel")
+    if nozzle.status != "ACTIVE" or nozzle.dispenser.status != "ACTIVE":
+        raise HTTPException(status_code=409, detail="Nozzle or dispenser is not active")
+    if nozzle.price <= 0:
+        raise HTTPException(status_code=409, detail="Nozzle price must be configured before dispensing")
+    requested_amount = parse_float(payload.get("requested_amount"), "requested_amount", minimum=0.01)
+    unit_price = nozzle.price
     requested_volume = round(requested_amount / unit_price, 3)
+    payment_ref = str(payload.get("payment_ref") or "").strip()
+    if not payment_ref:
+        raise HTTPException(status_code=400, detail="Verified payment reference is required")
+    payment = db.scalar(
+        select(PaymentRecord)
+        .where(PaymentRecord.reference == payment_ref)
+        .with_for_update()
+    )
+    if payment is None or payment.status != "VERIFIED" or payment.purpose != "FUEL":
+        raise HTTPException(status_code=400, detail="Payment is not verified")
+    if payment.transaction_id:
+        raise HTTPException(status_code=409, detail="Payment reference is already linked to a transaction")
+    if abs(payment.amount - requested_amount) > 0.01:
+        raise HTTPException(status_code=400, detail="Payment amount does not match the preset amount")
+    if payment.station_id != nozzle.dispenser.station_id:
+        raise HTTPException(status_code=400, detail="Payment is not assigned to this station")
+    if payment.nozzle_id is not None and payment.nozzle_id != nozzle.id:
+        raise HTTPException(status_code=400, detail="Payment is not assigned to this nozzle")
+    expected_methods = {
+        "OPAY_POS": {"CARD_POS", "OPAY_POS"},
+        "BANK_TRANSFER": {"BANK_TRANSFER"},
+    }
+    if payment.payment_method not in expected_methods[payment_channel]:
+        raise HTTPException(status_code=400, detail="Payment method does not match the dispensing channel")
 
     # Simulation parameter: simulate discrepancy or normal flow
     force_discrepancy = payload.get("simulate_discrepancy", False)
@@ -114,7 +164,7 @@ def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), us
         nozzle_id=nozzle.id,
         fcc_device_id=nozzle.fcc.id if nozzle.fcc else None,
         payment_channel=payment_channel,
-        payment_ref=payload.get("payment_ref", f"OPAY-REF-{uuid.uuid4().hex[:8].upper()}"),
+        payment_ref=payment_ref,
         unit_price=unit_price,
         requested_amount=requested_amount,
         requested_volume=requested_volume,
@@ -128,6 +178,32 @@ def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), us
         status="COMPLETED",
     )
     db.add(tx)
+    db.flush()
+    payment.transaction_id = tx.id
+    payment.station_id = nozzle.dispenser.station_id
+    payment.nozzle_id = nozzle.id
+
+    if payment_channel == "RFID_WALLET":
+        customer_id = payload.get("customer_id")
+        if not customer_id:
+            raise HTTPException(status_code=400, detail="Customer is required for RFID wallet dispensing")
+        wallet = db.scalar(select(Wallet).where(Wallet.customer_id == customer_id))
+        if wallet is None:
+            raise HTTPException(status_code=404, detail="Customer wallet not found")
+        if wallet.balance - wallet.reserved_balance < total_billed:
+            raise HTTPException(status_code=400, detail="Insufficient verified wallet balance")
+        balance_before = wallet.balance
+        wallet.balance -= total_billed
+        db.add(WalletLedgerEntry(
+            wallet_id=wallet.id,
+            reference=f"SALE-{tx.transaction_ref}",
+            entry_type="SALE_DEBIT",
+            amount=-round(total_billed, 2),
+            balance_before=balance_before,
+            balance_after=wallet.balance,
+            payment_reference=payment_ref,
+            created_by=user.user_id,
+        ))
 
     # Update Dispenser & Nozzle totalizers
     nozzle.totalizer_l += cpu_volume
@@ -151,20 +227,6 @@ def simulate_dispense(payload: dict[str, Any], db: Session = Depends(get_db), us
             entity_id=tx.id,
         )
         db.add(alert)
-
-    # Record verified payment
-    pay_rec = PaymentRecord(
-        transaction_id=tx.id,
-        reference=tx.payment_ref,
-        amount=total_billed,
-        currency="NGN",
-        provider="OPAY" if payment_channel == "OPAY_POS" else payment_channel,
-        payment_method=payment_channel,
-        status="VERIFIED",
-        station_id=nozzle.dispenser.station_id,
-        nozzle_id=nozzle.id,
-    )
-    db.add(pay_rec)
 
     db.commit()
     db.refresh(tx)

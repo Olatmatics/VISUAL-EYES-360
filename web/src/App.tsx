@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { GeoProvider } from './geo/GeoContext'
 import Layout from './components/Layout'
 import { Card } from './components/ui'
 import AccessDenied from './pages/AccessDenied'
@@ -58,7 +59,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <GeoProvider>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -87,6 +89,7 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        </GeoProvider>
       </AuthProvider>
     </BrowserRouter>
   )

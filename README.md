@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # VISUAL EYES 360
 
 Industrial IoT fuel-station automation, cashless dispensing, independent pulser verification, tank monitoring, fleet management and multi-station control platform for the Nigerian downstream oil & gas market.
@@ -95,7 +94,7 @@ Open `http://127.0.0.1:5173`. API docs are at `http://127.0.0.1:8000/docs`.
 
 On a brand-new database the first screen is `/setup`; use the one-time token `change-this-setup-token` to create the Superior Administrator. Change `SETUP_TOKEN` and `SECRET_KEY` in `.env` before any non-local use.
 
-To seed demo data and verify the whole backend flow:
+To run the backend smoke suite:
 
 ```powershell
 cd backend
@@ -103,22 +102,54 @@ $env:PYTHONPATH = (Get-Location).Path
 .\.venv\Scripts\python.exe -m tests.test_smoke
 ```
 
-Expected result: `TOTAL: 27/27 passed`. This seeds a local SQLite database with `SUPERADMIN001` / `Admin@1234` and `MGR001` (initial `Manager@1234`, forced to change to `Manager@5678` during the test). Delete `backend\visual_eyes_360.db` to start clean.
+The smoke test uses an isolated throwaway SQLite database and exercises authentication, station scope, wallet funding rejection, payment sandbox safety, and device telemetry ingestion. It does not seed the development database.
+
+## Production deployment
+
+The initial Linode Docker Compose deployment, PostgreSQL, HTTPS reverse proxy, secret template, and backup script are documented in [`deployment/README.md`](./deployment/README.md). Production startup rejects SQLite, weak/default secrets, wildcard CORS, and non-HTTPS public URLs. This deployment hosts the management portal only; real payment processing and fuel dispensing still require completed vendor integrations, firmware, and on-site safety validation.
 
 ## Implemented in this release
 
 - FastAPI backend with Argon2id passwords, JWT access/refresh rotation, session revocation, failed-login lockout, password reset and forced password change.
 - Superior Administrator first-run setup and Manager CRUD with 28 modules / 105 granular permissions and per-station access scope.
 - Station registration, station-scoped reads, audit log and dashboard counts.
-- React + TypeScript responsive web app with theme toggle, route guards, permission-driven navigation, station/User/Audit screens and refresh-on-401 API client.
+- Per-device FCC/tank-controller bearer credentials, authenticated telemetry ingestion, event idempotency, and append-only tank readings.
+- Wallet funding requires a verified, customer-bound funding payment; sandbox payment references remain unverified and cannot authorize fuel.
+- React + TypeScript responsive web app with theme toggle, route guards, permission-driven navigation and a refresh-on-401 API client.
+- Full management screens: dashboard, forecourt/dispensers/nozzles, ESP32-S3 FCC controllers, ATG tanks, fuel transactions, pulser reconciliation, tank reconciliation, OPay/POS payments, RFID wallets, fleets, price management, alerts, reports, users and audit log.
+- **App-entry splash animation** — jQuery-driven fuel nozzle gliding left→right with a three-dot loader and the AUTOMATION brand mark (`web/src/components/Splash.tsx`).
+- **PWA manifest + icons** — installable to home screen / app-like standalone window.
+- One-click launcher: `start.ps1` starts backend (8000) and web (5173) together.
+
+## Verification
+
+```powershell
+# Backend API smoke test (isolated throwaway DB, safe to re-run)
+cd backend
+$env:PYTHONPATH = (Get-Location).Path
+.\.venv\Scripts\python.exe -m tests.test_smoke
+
+# Frontend type-check + production build
+cd ..\web
+npm run build                                       # -> tsc --noEmit && vite build
+```
 
 ## Still pending
 
 - PostgreSQL production configuration, Redis token denylist, MQTT/SSE device transport.
-- Dispenser, nozzle, FCC, tank and tank-controller management screens beyond the dashboard counts.
-- OPay/POS integration, wallet, transactions, reconciliation, pricing, alerts and reports.
-- ESP32-S3 firmware, STM32 decision, electrical/safety design, Android APK, and all items in `docs/08-open-items.md`.
-=======
-# VISUAL-EYES-360
-FCC CONTROL AUTOMATION SOFTWARE FOR MANAGING RECONCILIATION, PRICE CHANGE, CPU COMMUNICATION AND ETC.....
->>>>>>> 27ebb3852ae2623f58dd0950fbe533552b7b8a1c
+- OPay/POS live credentials and callbacks (sandbox mock is implemented), verified bank-transfer provider.
+- ESP32-S3 firmware, STM32 decision, electrical/safety design, native Android APK, and all items in `docs/08-open-items.md`.
+
+## Backend recommendation
+
+The backend is **FastAPI (Python) + SQLAlchemy**, which is the right long-term choice for this product:
+
+- **Why keep it:** async-friendly, typed, auto-generates the `/docs` OpenAPI reference the firmware and Android teams will consume, and SQLAlchemy lets you run SQLite today and switch to PostgreSQL for production by changing one `DATABASE_URL`.
+- **Production path:** PostgreSQL 17 + Redis (JWT denylist, rate limiting) + MQTT broker for ESP32-S3 device transport. Same code, no rewrite.
+- **When to reconsider:** only if you need heavy real-time WebSocket fan-out at massive scale — then add a Node/Go gateway in front, but keep FastAPI as the system of record for RBAC, wallet and dispensing authorization.
+
+Do **not** move the authority for identity, RBAC, wallet balances or dispensing authorization off this backend — that is a non-negotiable constraint (README #7).
+
+## Product tagline
+
+**VISUAL-EYES-360** — FCC control automation software for managing reconciliation, price change, CPU communication and more.

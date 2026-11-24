@@ -1,11 +1,14 @@
 backend/.venv/
 __pycache__/
 *.py[cod]
-backend/visual_eyes_360.db*
+backend/*.db*
+deployment/mosquitto/passwd
 backend/.env
 web/node_modules/
 web/dist/
 web/.env*
+/deployment/.env.production
+/deployment/backups/
 .vscode/
 .idea/
 *.log

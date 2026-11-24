@@ -32,8 +32,8 @@ export default function FCCDevices() {
   return (
     <>
       <PageHeader
-        title="ESP32-S3 Fuel Control Controllers (FCC)"
-        subtitle="Hardware telemetry, Wi-Fi / 4G SIM failover monitoring, pulse calibration factors (One FCC Per Nozzle Architecture)"
+        title="Fuel Control Controllers (FCC)"
+        subtitle="Hardware telemetry, wireless failover monitoring, and pulse calibration factors"
         action={<Button onClick={load} variant="secondary">↻ Refresh Telemetry</Button>}
       />
       {error && <ErrorBanner message={error} />}

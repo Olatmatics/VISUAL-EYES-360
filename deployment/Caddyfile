@@ -1,0 +1,25 @@
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	@ingest path /api/v1/device-ingest/*
+	handle @ingest {
+		reverse_proxy ingest:8001
+	}
+
+	@backend path /api/* /setup/status /health
+	handle @backend {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

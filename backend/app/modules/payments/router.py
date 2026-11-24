@@ -1,9 +1,11 @@
 import uuid
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
-from app.core.deps import allowed_station_ids, get_current_user, require_permission
+from app.core.deps import allowed_station_ids, get_current_user, require_permission, write_audit
+from app.core.config import settings
+from app.core.validation import parse_float, validate_station
 from app.db.base import get_db
 from app.models.auth import User
 from app.models.core import Nozzle, PaymentRecord, POSTerminal
@@ -13,6 +15,8 @@ router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 
 @router.get("/terminals")
 def list_pos_terminals(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if not user.has_permission("pos", "view") and not user.has_permission("payments", "view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
     stmt = select(POSTerminal)
     allowed = allowed_station_ids(user)
     if allowed is not None:
@@ -38,21 +42,52 @@ def list_pos_terminals(station_id: str | None = None, db: Session = Depends(get_
 
 
 @router.post("/terminals", status_code=status.HTTP_201_CREATED)
-def create_pos_terminal(payload: dict[str, Any], db: Session = Depends(get_db), user: User = Depends(require_permission("pos", "create"))):
-    station_id = payload.get("station_id")
+def create_pos_terminal(
+    payload: dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("pos", "create")),
+):
+    station_id = str(payload.get("station_id") or "")
+    station = validate_station(db, station_id)
     allowed = allowed_station_ids(user)
     if allowed is not None and station_id not in allowed:
         raise HTTPException(status_code=403, detail="Station out of scope")
+    terminal_id = str(payload.get("terminal_id") or "").strip()
+    serial_number = str(payload.get("serial_number") or "").strip()
+    if not terminal_id or not serial_number:
+        raise HTTPException(status_code=400, detail="Terminal ID and serial number are required")
+    if db.scalar(select(POSTerminal.id).where(POSTerminal.terminal_id == terminal_id)):
+        raise HTTPException(status_code=409, detail="Terminal ID already registered")
+    if db.scalar(select(POSTerminal.id).where(POSTerminal.serial_number == serial_number)):
+        raise HTTPException(status_code=409, detail="Terminal serial number already registered")
     nozzle_id = payload.get("nozzle_id")
+    nozzle = None
+    if nozzle_id:
+        nozzle = db.scalar(select(Nozzle).where(Nozzle.id == nozzle_id))
+        if nozzle is None:
+            raise HTTPException(status_code=404, detail="Nozzle not found")
+        if nozzle.dispenser.station_id != station.id:
+            raise HTTPException(status_code=400, detail="Nozzle belongs to a different station")
+        if nozzle.pos is not None:
+            raise HTTPException(status_code=409, detail="Nozzle already has an assigned POS terminal")
     terminal = POSTerminal(
-        terminal_id=payload["terminal_id"],
-        serial_number=payload["serial_number"],
-        provider=payload.get("provider", "OPAY"),
-        station_id=station_id,
+        terminal_id=terminal_id,
+        serial_number=serial_number,
+        provider=str(payload.get("provider") or "OPAY").strip().upper(),
+        station_id=station.id,
         nozzle_id=nozzle_id if nozzle_id else None,
-        is_active=payload.get("is_active", True),
+        is_active=bool(payload.get("is_active", True)),
     )
     db.add(terminal)
+    db.flush()
+    write_audit(db, user, "REGISTER_POS_TERMINAL", "POSTerminal", terminal.id, after={
+        "terminal_id": terminal.terminal_id,
+        "serial_number": terminal.serial_number,
+        "provider": terminal.provider,
+        "station_id": terminal.station_id,
+        "nozzle_id": terminal.nozzle_id,
+    }, request=request)
     db.commit()
     db.refresh(terminal)
     return {"id": terminal.id, "terminal_id": terminal.terminal_id}
@@ -60,6 +95,8 @@ def create_pos_terminal(payload: dict[str, Any], db: Session = Depends(get_db), 
 
 @router.get("/records")
 def list_payment_records(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if not user.has_permission("payments", "view"):
+        raise HTTPException(status_code=403, detail="Permission denied")
     stmt = select(PaymentRecord).order_by(desc(PaymentRecord.created_at))
     allowed = allowed_station_ids(user)
     if allowed is not None:
@@ -84,15 +121,20 @@ def list_payment_records(station_id: str | None = None, db: Session = Depends(ge
 
 
 @router.post("/simulate-opay-checkout")
-def simulate_opay_checkout(payload: dict[str, Any], db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """
-    Simulates OPay Card / Bank Transfer verification.
-    Only successful verified responses return an authenticated dispensing authorization token.
-    """
-    amount = float(payload.get("amount", 5000.0))
+def simulate_opay_checkout(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("payments", "create")),
+):
+    """Development-only sandbox. This endpoint never creates a verified payment."""
+    if settings.ENVIRONMENT.lower() in {"production", "prod", "live"}:
+        raise HTTPException(status_code=404, detail="Sandbox endpoint unavailable")
+    amount = parse_float(payload.get("amount"), "amount", minimum=0.01)
     pos_id = payload.get("pos_terminal_id", "OPAY-POS-001")
     nozzle_id = payload.get("nozzle_id")
-    method = payload.get("payment_method", "CARD_POS")  # CARD_POS or BANK_TRANSFER
+    method = str(payload.get("payment_method") or "CARD_POS").upper()
+    if method not in {"CARD_POS", "BANK_TRANSFER"}:
+        raise HTTPException(status_code=400, detail="Unsupported sandbox payment method")
 
     ref = f"OPAY-PAY-{uuid.uuid4().hex[:10].upper()}"
     rec = PaymentRecord(
@@ -101,21 +143,20 @@ def simulate_opay_checkout(payload: dict[str, Any], db: Session = Depends(get_db
         currency="NGN",
         provider="OPAY",
         payment_method=method,
-        status="VERIFIED",
+        status="INITIATED",
         pos_terminal_id=pos_id,
         nozzle_id=nozzle_id,
     )
     db.add(rec)
     db.commit()
 
-    # Returns cryptographically verified dispensing authorization token
-    auth_token = f"AUTH-TOKEN-{uuid.uuid4().hex}"
     return {
-        "status": "SUCCESS",
+        "status": "SANDBOX_INITIATED",
+        "sandbox": True,
         "payment_reference": ref,
         "amount": amount,
         "currency": "NGN",
-        "dispensing_authorized": True,
-        "authorization_token": auth_token,
-        "message": "Payment verified via OPay Gateway. Dispensing authorized.",
+        "dispensing_authorized": False,
+        "authorization_token": None,
+        "message": "Development sandbox only. No real payment was verified.",
     }

@@ -1,0 +1,11 @@
+.git
+.venv
+**/__pycache__
+**/*.py[cod]
+backend/.env
+backend/visual_eyes_360.db*
+web/node_modules
+web/dist
+web/.env*
+deployment/.env.production
+deployment/backups

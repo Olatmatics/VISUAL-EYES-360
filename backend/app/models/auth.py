@@ -81,6 +81,16 @@ class User(Base):
     stations: Mapped[list["Station"]] = relationship(secondary=user_stations)
     all_stations: Mapped[bool] = mapped_column(default=False)
 
+    # Geographic scope for regional / state / LGA managers. When either is set
+    # the user automatically sees every station inside that area, in addition
+    # to any stations explicitly assigned.
+    scope_state_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("states.id"), nullable=True, index=True
+    )
+    scope_lga_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("lgas.id"), nullable=True, index=True
+    )
+
     def permission_keys(self) -> set[str]:
         keys = {p.key for p in self.role.permissions} if self.role else set()
         for override in self.permission_overrides:

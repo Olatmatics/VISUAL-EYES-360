@@ -12,13 +12,13 @@ export default function CustomerWallets() {
   const [creating, setCreating] = useState(false)
   const [fundingCustomer, setFundingCustomer] = useState<CustomerItem | null>(null)
   const [fundAmount, setFundAmount] = useState('25000')
+  const [fundReference, setFundReference] = useState('')
 
   const [form, setForm] = useState({
     full_name: '',
     phone: '',
     email: '',
     category: 'CORPORATE',
-    initial_balance: '50000',
     card_uid: '',
   })
 
@@ -47,7 +47,10 @@ export default function CustomerWallets() {
     e.preventDefault()
     if (!fundingCustomer) return
     try {
-      await api.post(`/customers/wallets/${fundingCustomer.id}/fund`, { amount: parseFloat(fundAmount) })
+      await api.post(`/customers/wallets/${fundingCustomer.id}/fund`, {
+        amount: parseFloat(fundAmount),
+        payment_reference: fundReference,
+      })
       setFundingCustomer(null)
       load()
     } catch (err) {
@@ -177,12 +180,6 @@ export default function CustomerWallets() {
               </select>
             </label>
             <Input
-              label="Initial Wallet Funding (NGN)"
-              type="number"
-              value={form.initial_balance}
-              onChange={(e) => setForm({ ...form, initial_balance: e.target.value })}
-            />
-            <Input
               label="Paired RFID Card UID (Optional)"
               placeholder="e.g. RFID-NG-9812402"
               value={form.card_uid}
@@ -204,7 +201,13 @@ export default function CustomerWallets() {
               onChange={(e) => setFundAmount(e.target.value)}
               required
             />
-            <Button type="submit">Verify Payment & Deposit Funds</Button>
+            <Input
+              label="Verified Payment Reference"
+              value={fundReference}
+              onChange={(e) => setFundReference(e.target.value)}
+              required
+            />
+            <Button type="submit">Deposit Verified Funds</Button>
           </form>
         </Modal>
       )}

@@ -1,0 +1,19 @@
+# Activate only when field devices are ready for MQTT.
+# Copy the lines below into mosquitto.conf, place certificates in
+# deployment/mosquitto/certs/, mount that folder into the container, and
+# publish only 8883. Never publish plaintext 1883 to the internet.
+
+listener 8883
+cafile /mosquitto/certs/ca.crt
+certfile /mosquitto/certs/server.crt
+keyfile /mosquitto/certs/server.key
+require_certificate false
+allow_anonymous false
+password_file /mosquitto/config/passwd
+acl_file /mosquitto/config/acl
+
+# Keep the internal 1883 listener for services on the `data` network:
+# listener 1883
+# allow_anonymous false
+# password_file /mosquitto/config/passwd
+# acl_file /mosquitto/config/acl

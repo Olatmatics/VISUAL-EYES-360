@@ -14,11 +14,20 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [setupRequired, setSetupRequired] = useState(false)
+  const [setupStatusError, setSetupStatusError] = useState('')
 
   useEffect(() => {
+    let active = true
     api.get<{ setup_required: boolean }>('/setup/status')
-      .then((data) => setSetupRequired(data.setup_required))
-      .catch(() => undefined)
+      .then((data) => {
+        if (active) setSetupRequired(data.setup_required)
+      })
+      .catch((err) => {
+        if (active) {
+          setSetupStatusError(err instanceof Error ? err.message : 'Unable to check backend setup status.')
+        }
+      })
+    return () => { active = false }
   }, [])
 
   if (authLoading) return <div className="center-screen">Loading…</div>
@@ -27,12 +36,6 @@ export default function Login() {
   const handleTabSwitch = (newMode: 'admin' | 'manager') => {
     setMode(newMode)
     setError('')
-    // Set helpful placeholder or keep blank
-    if (newMode === 'admin' && (userId === 'MGR001' || userId === '')) {
-      setUserId('SUPERADMIN001')
-    } else if (newMode === 'manager' && (userId === 'SUPERADMIN001' || userId === '')) {
-      setUserId('MGR001')
-    }
   }
 
   const submit = async (event: FormEvent) => {
@@ -78,7 +81,7 @@ export default function Login() {
           <p>Cashless dispensing, independent pulser verification, tank telemetry and multi-station visibility — one secure platform.</p>
         </div>
         <div className="auth-features">
-          <span>◉ Live device telemetry (ESP32-S3 FCC & ATG)</span>
+          <span>◉ Live FCC device and tank telemetry</span>
           <span>◉ Verified-payment dispensing (No payment = No fuel)</span>
           <span>◉ Role & station scoped access control (Admin & Manager)</span>
           <span>◉ Independent pulser discrepancy analysis (0.49 L threshold)</span>
@@ -140,11 +143,12 @@ export default function Login() {
             </div>
           )}
 
+          {setupStatusError && <ErrorBanner message={`Could not check first-run setup: ${setupStatusError}`} />}
           {error && <ErrorBanner message={error} />}
 
           <Input
             label={mode === 'admin' ? 'Administrator User ID' : 'Manager ID'}
-            placeholder={mode === 'admin' ? 'e.g. SUPERADMIN001' : 'e.g. MGR001'}
+            placeholder={mode === 'admin' ? 'Enter administrator ID' : 'Enter manager ID'}
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             autoComplete="username"
@@ -174,24 +178,9 @@ export default function Login() {
             {busy ? 'Authenticating…' : mode === 'admin' ? 'Sign in as Superior Administrator' : 'Sign in as Station Manager'}
           </Button>
 
-          <details className="demo-creds-box">
-            <summary>🔑 Default Credentials & Instructions</summary>
-            <div className="demo-creds-list">
-              <div className="demo-creds-item">
-                <span><strong>Admin:</strong> <code>SUPERADMIN001</code></span>
-                <span>Password: <code>Admin@1234</code></span>
-              </div>
-              <div className="demo-creds-item">
-                <span><strong>Manager:</strong> <code>MGR001</code></span>
-                <span>Password: <code>Manager@5678</code></span>
-              </div>
-              <small style={{ marginTop: '4px', display: 'block' }}>
-                Note: Backend server must be running at <code>http://127.0.0.1:8000</code>.
-              </small>
-            </div>
-          </details>
-
-          <p className="auth-help">Access is restricted to authorized personnel in compliance with forecourt security protocols.</p>
+          <p className="auth-help">
+            First installation? Use the one-time setup link above. Otherwise, sign in with the account created for you by your administrator.
+          </p>
         </form>
       </div>
     </div>

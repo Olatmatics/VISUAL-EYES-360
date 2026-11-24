@@ -74,7 +74,7 @@ export default function Dashboard() {
           <Card className="metric-card tone-green">
             <span className="metric-label">Dispensers / Nozzles</span>
             <strong className="metric-value">{summary?.dispensers ?? 0} / {summary?.nozzles ?? 0}</strong>
-            <span className="metric-foot">1 ESP32-S3 FCC Per Nozzle</span>
+            <span className="metric-foot">FCC devices assigned by nozzle</span>
           </Card>
         </Link>
 
@@ -169,8 +169,8 @@ export default function Dashboard() {
         <Card>
           <h3>Forecourt Hardware & Network Architecture</h3>
           <div className="status-list">
-            <div><span>Primary Controller</span><strong>ESP32-S3 (1 per nozzle)</strong></div>
-            <div><span>Tank Telemetry</span><strong>Dedicated ESP32 (Modbus RTU)</strong></div>
+            <div><span>Forecourt devices</span><strong>FCC device assigned per nozzle</strong></div>
+            <div><span>Tank telemetry</span><strong>Tank controller (Modbus RTU)</strong></div>
             <div><span>Network Standard</span><Badge tone="success">Wi-Fi 6 + 4G LTE SIM Only (Zero Ethernet)</Badge></div>
             <div><span>Payment Rule</span><Badge tone="info">No Verified Payment, No Dispensing</Badge></div>
             <div><span>Discrepancy Threshold</span><strong>0.490 Litres</strong></div>

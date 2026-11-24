@@ -1,12 +1,20 @@
 import uuid
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.core.deps import get_current_user, require_permission
+from app.core.deps import get_current_user, require_permission, write_audit
 from app.db.base import get_db
 from app.models.auth import User
-from app.models.core import Customer, Fleet, RFIDCard, Vehicle, Wallet
+from app.models.core import (
+    Customer,
+    Fleet,
+    PaymentRecord,
+    RFIDCard,
+    Vehicle,
+    Wallet,
+    WalletLedgerEntry,
+)
 
 router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
@@ -55,7 +63,7 @@ def create_customer(payload: dict[str, Any], db: Session = Depends(get_db), user
     # Automatically create dedicated wallet
     wallet = Wallet(
         customer_id=customer.id,
-        balance=float(payload.get("initial_balance", 0.0)),
+        balance=0.0,
         reserved_balance=0.0,
     )
     db.add(wallet)
@@ -77,14 +85,67 @@ def create_customer(payload: dict[str, Any], db: Session = Depends(get_db), user
 
 
 @router.post("/wallets/{customer_id}/fund")
-def fund_wallet(customer_id: str, payload: dict[str, Any], db: Session = Depends(get_db), user: User = Depends(require_permission("wallet", "manage"))):
-    wallet = db.scalar(select(Wallet).where(Wallet.customer_id == customer_id))
+def fund_wallet(
+    customer_id: str,
+    payload: dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("wallet", "manage")),
+):
+    wallet = db.scalar(select(Wallet).where(Wallet.customer_id == customer_id).with_for_update())
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
     amount = float(payload.get("amount", 0.0))
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid funding amount")
+    payment_reference = str(payload.get("payment_reference") or "").strip()
+    if not payment_reference:
+        raise HTTPException(status_code=400, detail="Verified payment reference is required")
+    payment = db.scalar(
+        select(PaymentRecord)
+        .where(PaymentRecord.reference == payment_reference)
+        .with_for_update()
+    )
+    if (
+        payment is None
+        or payment.status != "VERIFIED"
+        or payment.transaction_id is not None
+        or payment.purpose != "WALLET_FUNDING"
+        or payment.customer_id != customer_id
+    ):
+        raise HTTPException(status_code=400, detail="Payment is not verified")
+    if abs(payment.amount - amount) > 0.01:
+        raise HTTPException(status_code=400, detail="Funding amount does not match the verified payment")
+    if db.scalar(select(WalletLedgerEntry).where(WalletLedgerEntry.payment_reference == payment_reference)):
+        raise HTTPException(status_code=409, detail="This payment has already funded a wallet")
+
+    balance_before = wallet.balance
     wallet.balance += amount
+    db.add(WalletLedgerEntry(
+        wallet_id=wallet.id,
+        reference=f"WLF-{uuid.uuid4().hex[:12].upper()}",
+        entry_type="FUNDING",
+        amount=amount,
+        balance_before=balance_before,
+        balance_after=wallet.balance,
+        payment_reference=payment_reference,
+        created_by=user.user_id,
+    ))
+    write_audit(
+        db,
+        user,
+        "FUND_WALLET",
+        "Wallet",
+        wallet.id,
+        before={"balance": balance_before},
+        after={
+            "balance": wallet.balance,
+            "amount": amount,
+            "payment_reference": payment_reference,
+            "customer_id": customer_id,
+        },
+        request=request,
+    )
     db.commit()
     return {"customer_id": customer_id, "new_balance": wallet.balance}
 

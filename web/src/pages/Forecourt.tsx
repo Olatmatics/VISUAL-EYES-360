@@ -12,6 +12,7 @@ export default function Forecourt() {
   const [selectedNozzle, setSelectedNozzle] = useState<NozzleItem | null>(null)
   const [amount, setAmount] = useState('5000')
   const [paymentChannel, setPaymentChannel] = useState('OPAY_POS')
+  const [paymentRef, setPaymentRef] = useState('')
   const [simulateDiscrepancy, setSimulateDiscrepancy] = useState(false)
   const [dispensing, setDispensing] = useState(false)
   const [lastResult, setLastResult] = useState<any>(null)
@@ -37,6 +38,7 @@ export default function Forecourt() {
         nozzle_id: selectedNozzle.id,
         requested_amount: parseFloat(amount),
         payment_channel: paymentChannel,
+        payment_ref: paymentRef,
         simulate_discrepancy: simulateDiscrepancy,
       })
       setLastResult(res)
@@ -51,7 +53,7 @@ export default function Forecourt() {
   return (
     <>
       <PageHeader
-        title="Forecourt & Live Dispensing Simulator"
+        title="Forecourt & Dispensing Sandbox"
         subtitle="Real-time pump status, cashless preset trigger, and independent pulser verification"
         action={
           <Button onClick={load} variant="secondary">
@@ -78,7 +80,7 @@ export default function Forecourt() {
 
               <div style={{ background: 'var(--surface-2)', padding: '10px', borderRadius: '8px', fontSize: '12px', display: 'grid', gap: '4px', margin: '10px 0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>ESP32-S3 FCC:</span>
+                  <span>FCC Controller:</span>
                   <span><strong>{n.fcc?.uid ?? 'Unassigned'}</strong> <Badge tone={isOnline ? 'success' : 'danger'}>{isOnline ? 'Online' : 'Offline'}</Badge></span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -135,6 +137,12 @@ export default function Forecourt() {
                 <option value="RFID_WALLET">Special Customer RFID Wallet Card</option>
               </select>
             </label>
+            <Input
+              label="Verified Payment Reference"
+              value={paymentRef}
+              onChange={(e) => setPaymentRef(e.target.value)}
+              required
+            />
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', background: 'var(--surface-2)', padding: '10px', borderRadius: '8px', cursor: 'pointer' }}>
               <input
