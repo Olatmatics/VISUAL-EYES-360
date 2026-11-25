@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 type NavItem = { to: string; label: string; module: string; action: string; icon: string; section?: string }
 
 const NAV: NavItem[] = [
-  { to: '/quick-setup', label: 'Quick Setup', module: 'dashboard', action: 'view', icon: '⚡', section: 'START HERE' },
+  { to: '/quick-setup', label: 'Start Here · Set Up', module: 'dashboard', action: 'view', icon: '⚡', section: 'START HERE' },
   // Operations
   { to: '/', label: 'Operations Dashboard', module: 'dashboard', action: 'view', icon: '▦', section: 'OPERATIONS' },
   { to: '/forecourt', label: 'Forecourt & Dispense', module: 'dispensers', action: 'view', icon: '⚡' },

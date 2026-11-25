@@ -19,6 +19,7 @@ from app.modules.device_ingest.router import router as device_ingest_router
 from app.modules.forecourt.router import router as forecourt_router
 from app.modules.geo.router import router as geo_router
 from app.modules.operations.router import router as operations_router
+from app.modules.simple.router import router as simple_router
 from app.modules.quicksetup.router import router as quicksetup_router
 from app.modules.rfid.router import router as rfid_router
 from app.modules.prototype.router import router as prototype_router
@@ -84,6 +85,7 @@ for router in (
     prototype_router,
     quicksetup_router,
     rfid_router,
+    simple_router,
 ):
     app.include_router(router)
 
