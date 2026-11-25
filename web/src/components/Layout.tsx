@@ -12,7 +12,8 @@ const NAV: NavItem[] = [
   { to: '/transactions', label: 'Fuel Transactions', module: 'transactions', action: 'view', icon: '📑' },
 
   // Forecourt Infrastructure
-  { to: '/stations', label: 'Stations Network', module: 'stations', action: 'view', icon: '◈', section: 'INFRASTRUCTURE' },
+  { to: '/locations', label: 'Browse by Location', module: 'stations', action: 'view', icon: '🗺', section: 'INFRASTRUCTURE' },
+  { to: '/stations', label: 'Stations Network', module: 'stations', action: 'view', icon: '◈' },
   { to: '/dispensers', label: 'Dispensers & Nozzles', module: 'dispensers', action: 'view', icon: '⛽' },
   { to: '/fcc-devices', label: 'Devices', module: 'fcc_devices', action: 'view', icon: '📡' },
   { to: '/tanks', label: 'ATG Storage Tanks', module: 'tanks', action: 'view', icon: '🛢' },

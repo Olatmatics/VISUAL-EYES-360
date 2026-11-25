@@ -529,6 +529,20 @@ table tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transpa
 .quick-grid .card { display: grid; gap: 10px; align-content: start; }
 .quick-grid .muted { margin: 0; font-size: 12px; }
 
+.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.inventory-item {
+  border: 1px solid var(--border); border-radius: 9px; padding: 12px;
+  background: var(--surface-2); display: grid; gap: 5px; font-size: 12px;
+  transition: transform var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+}
+.inventory-item:hover { transform: translateY(-2px); border-color: var(--primary); }
+
+.action-error {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid var(--danger); color: var(--danger);
+  padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; flex: 1;
+}
+
 .notice-success {
   background: color-mix(in srgb, var(--success) 12%, transparent);
   border: 1px solid var(--success); color: var(--success);

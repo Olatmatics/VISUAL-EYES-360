@@ -50,6 +50,19 @@ export default function QuickSetup() {
         subtitle="Type a name and a few numbers. Everything else is created for you automatically."
       />
 
+      <Card style={{ marginBottom: 16, position: 'sticky', top: 12, zIndex: 5 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button type="submit" form="simple-setup-form" disabled={busy}
+            style={{ fontSize: 16, padding: '12px 20px' }}>
+            {busy ? 'Setting up…' : '✓ Set Up Everything'}
+          </Button>
+          {error && <div className="action-error">{error}</div>}
+          {result?.ok && <div className="notice-success" style={{ margin: 0, flex: 1 }}>
+            ✓ {result.message} {result.summary}
+          </div>}
+        </div>
+      </Card>
+
       <Card style={{ marginBottom: 16 }}>
         <h3>What is already registered</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -75,7 +88,7 @@ export default function QuickSetup() {
           nozzle records, tanks and device assignments are all generated automatically.
         </div>
 
-        <form onSubmit={submit} style={{ display: 'grid', gap: 16 }}>
+        <form id="simple-setup-form" onSubmit={submit} style={{ display: 'grid', gap: 16 }}>
           <Input label="1. Station name" placeholder="e.g. Abuja Main Station"
             value={form.station_name}
             onChange={(e) => setForm({ ...form, station_name: e.target.value })} required />
@@ -111,9 +124,6 @@ export default function QuickSetup() {
             onChange={(e) => setForm({ ...form, card_uid: e.target.value })}
             placeholder="Place the card on the reader and type the UID from Serial Monitor" />
 
-          <Button type="submit" disabled={busy} style={{ fontSize: 16, padding: '12px 20px' }}>
-            {busy ? 'Setting up…' : '✓ Set Up Everything'}
-          </Button>
         </form>
       </Card>
 

@@ -20,6 +20,7 @@ import Payments from './pages/Payments'
 import PriceManagement from './pages/PriceManagement'
 import PulserReconciliation from './pages/PulserReconciliation'
 import QuickSetup from './pages/QuickSetup'
+import LocationBrowser from './pages/LocationBrowser'
 import Reports from './pages/Reports'
 import ResetPassword from './pages/ResetPassword'
 import Settings from './pages/Settings'
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="change-password" element={<Protected><ChangePassword /></Protected>} />
             <Route index element={<Protected module="dashboard"><Dashboard /></Protected>} />
             <Route path="quick-setup" element={<Protected><QuickSetup /></Protected>} />
+            <Route path="locations" element={<Protected module="stations"><LocationBrowser /></Protected>} />
             <Route path="forecourt" element={<Protected module="dispensers"><Forecourt /></Protected>} />
             <Route path="transactions" element={<Protected module="transactions"><Transactions /></Protected>} />
             <Route path="stations" element={<Protected module="stations"><Stations /></Protected>} />
