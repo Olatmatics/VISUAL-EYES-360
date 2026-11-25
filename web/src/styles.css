@@ -542,7 +542,7 @@ table tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transpa
 .ticker-window { flex: 1; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
 .ticker-track {
   display: inline-block; white-space: nowrap; font-size: 12px;
-  animation: tickerScroll 60s linear infinite;
+  animation: tickerScroll 240s linear infinite;
 }
 .device-ticker:hover .ticker-track { animation-play-state: paused; }
 @keyframes tickerScroll {
