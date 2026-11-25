@@ -15,6 +15,7 @@ from app.models.core import (
     FuelTransaction,
     Nozzle,
     PaymentRecord,
+    Station,
     SystemAlert,
     Tank,
     Wallet,
@@ -28,6 +29,8 @@ router = APIRouter(prefix="/api/v1", tags=["transactions"])
 def list_transactions(
     station_id: str | None = None,
     nozzle_id: str | None = None,
+    state_id: str | None = None,
+    lga_id: str | None = None,
     discrepancy_only: bool = False,
     limit: int = Query(default=50, le=200),
     db: Session = Depends(get_db),
@@ -39,6 +42,12 @@ def list_transactions(
         stmt = stmt.where(FuelTransaction.station_id.in_(allowed))
     if station_id:
         stmt = stmt.where(FuelTransaction.station_id == station_id)
+    if state_id:
+        ids = db.scalars(select(Station.id).where(Station.state_id == state_id)).all()
+        stmt = stmt.where(FuelTransaction.station_id.in_(ids))
+    if lga_id:
+        ids = db.scalars(select(Station.id).where(Station.lga_id == lga_id)).all()
+        stmt = stmt.where(FuelTransaction.station_id.in_(ids))
     if nozzle_id:
         stmt = stmt.where(FuelTransaction.nozzle_id == nozzle_id)
     if discrepancy_only:
@@ -52,6 +61,8 @@ def list_transactions(
             "transaction_ref": t.transaction_ref,
             "station_id": t.station_id,
             "station_name": t.station.name if t.station else "",
+            "state_name": t.station.state.name if t.station and t.station.state else "",
+            "lga_name": t.station.lga.name if t.station and t.station.lga else "",
             "dispenser_code": t.dispenser.code if t.dispenser else "",
             "nozzle_number": t.nozzle.number if t.nozzle else 1,
             "product_code": t.nozzle.product.code if t.nozzle and t.nozzle.product else "PMS",

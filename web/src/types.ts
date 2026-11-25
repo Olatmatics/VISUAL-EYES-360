@@ -325,6 +325,8 @@ export interface TransactionItem {
   transaction_ref: string
   station_id: string
   station_name: string
+  state_name?: string
+  lga_name?: string
   dispenser_code: string
   nozzle_number: number
   product_code: string

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { Badge, Button, Card, ErrorBanner, Modal, PageHeader } from '../components/ui'
-import type { TransactionItem } from '../types'
+import type { GeoLga, GeoState, Station, TransactionItem } from '../types'
 
 export default function Transactions() {
   const { user } = useAuth()
@@ -11,16 +11,40 @@ export default function Transactions() {
   const [error, setError] = useState('')
   const [selectedTx, setSelectedTx] = useState<TransactionItem | null>(null)
   const [filterDiscrepancy, setFilterDiscrepancy] = useState(false)
+  const [states, setStates] = useState<GeoState[]>([])
+  const [lgas, setLgas] = useState<GeoLga[]>([])
+  const [stations, setStations] = useState<Station[]>([])
+  const [stateId, setStateId] = useState('')
+  const [lgaId, setLgaId] = useState('')
+  const [stationId, setStationId] = useState('')
 
   const load = () => {
     setLoading(true)
-    api.get<TransactionItem[]>(`/transactions?limit=100&discrepancy_only=${filterDiscrepancy}`)
+    const q = new URLSearchParams({ limit: '100', discrepancy_only: String(filterDiscrepancy) })
+    if (stateId) q.set('state_id', stateId)
+    if (lgaId) q.set('lga_id', lgaId)
+    if (stationId) q.set('station_id', stationId)
+    api.get<TransactionItem[]>(`/transactions?${q}`)
       .then(setTransactions)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load transactions'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [filterDiscrepancy])
+  useEffect(() => { api.get<GeoState[]>('/geo/states').then(setStates).catch(() => setStates([])) }, [])
+  useEffect(() => {
+    if (!stateId) { setLgas([]); setLgaId(''); return }
+    api.get<GeoLga[]>(`/geo/states/${stateId}/lgas`).then(setLgas).catch(() => setLgas([]))
+  }, [stateId])
+  useEffect(() => {
+    if (!stateId) { setStations([]); setStationId(''); return }
+    const q = new URLSearchParams({ state_id: stateId })
+    if (lgaId) q.set('lga_id', lgaId)
+    api.get<Station[]>(`/stations?${q}`).then((s) => {
+      setStations(s)
+      if (!s.some((x) => x.id === stationId)) setStationId('')
+    }).catch(() => setStations([]))
+  }, [stateId, lgaId])
+  useEffect(load, [filterDiscrepancy, stateId, lgaId, stationId])
 
   return (
     <>
@@ -41,6 +65,30 @@ export default function Transactions() {
       />
       {error && <ErrorBanner message={error} />}
 
+      <Card style={{ marginBottom: 16 }}>
+        <div className="form-grid">
+          <label className="field"><span>State / FCT</span>
+            <select value={stateId} onChange={(e) => { setStateId(e.target.value); setLgaId(''); setStationId('') }}>
+              <option value="">All states</option>
+              {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>LGA</span>
+            <select value={lgaId} disabled={!stateId} onChange={(e) => { setLgaId(e.target.value); setStationId('') }}>
+              <option value="">All LGAs</option>
+              {lgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>Station</span>
+            <select value={stationId} disabled={!stateId} onChange={(e) => setStationId(e.target.value)}>
+              <option value="">All stations in this area</option>
+              {stations.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+            </select>
+          </label>
+        </div>
+        <small className="muted">Showing {transactions.length} transaction(s) for the selected location.</small>
+      </Card>
+
       <Card>
         <div style={{ overflowX: 'auto' }}>
           <table className="table" style={{ width: '100%', fontSize: '13px' }}>
@@ -48,6 +96,7 @@ export default function Transactions() {
               <tr>
                 <th>Reference</th>
                 <th>Time</th>
+                <th>Location</th>
                 <th>Station / Pump</th>
                 <th>Product</th>
                 <th>Billed Amount</th>
@@ -63,6 +112,7 @@ export default function Transactions() {
                 <tr key={t.id} style={{ background: t.discrepancy_alert ? 'rgba(214, 69, 80, 0.05)' : undefined }}>
                   <td><code>{t.transaction_ref}</code></td>
                   <td>{new Date(t.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td><small style={{ color: 'var(--muted)' }}>{[t.state_name, t.lga_name].filter(Boolean).join(' / ') || '—'}</small></td>
                   <td>{t.station_name}<br /><small style={{ color: 'var(--muted)' }}>{t.dispenser_code} · N#{t.nozzle_number}</small></td>
                   <td><strong>{t.product_code}</strong></td>
                   <td><strong>₦{t.total_amount_billed.toLocaleString()}</strong></td>
