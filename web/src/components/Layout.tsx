@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
 
   // Forecourt Infrastructure
   { to: '/locations', label: 'Browse by Location', module: 'stations', action: 'view', icon: '🗺', section: 'INFRASTRUCTURE' },
+  { to: '/device-directory', label: 'Device ID Directory', module: 'stations', action: 'view', icon: '🪪' },
   { to: '/stations', label: 'Stations Network', module: 'stations', action: 'view', icon: '◈' },
   { to: '/dispensers', label: 'Dispensers & Nozzles', module: 'dispensers', action: 'view', icon: '⛽' },
   { to: '/fcc-devices', label: 'Devices', module: 'fcc_devices', action: 'view', icon: '📡' },

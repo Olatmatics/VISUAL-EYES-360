@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Badge, Button, Card, ErrorBanner, PageHeader } from '../components/ui'
 import type { GeoLga, GeoState, Station } from '../types'
@@ -8,6 +9,7 @@ type Item = Record<string, any>
 type CardItem = { id: string; uid: string; owner: string; blocked: boolean; balance_ngn: number }
 
 export default function LocationBrowser() {
+  const navigate = useNavigate()
   const [states, setStates] = useState<GeoState[]>([])
   const [lgas, setLgas] = useState<GeoLga[]>([])
   const [stations, setStations] = useState<Station[]>([])
@@ -52,7 +54,11 @@ export default function LocationBrowser() {
 
   return (
     <>
-      <PageHeader title="Browse by Location" subtitle="Country → State → LGA → Station → Equipment. RFID cards work in every location." />
+      <PageHeader
+        title="Browse by Location"
+        subtitle="Country → State → LGA → Station → Equipment. RFID cards work in every location."
+        action={<Button variant="secondary" onClick={() => navigate('/device-directory')}>🪪 Device ID Directory</Button>}
+      />
       {error && <ErrorBanner message={error} />}
 
       <Card style={{ marginBottom: 16 }}>

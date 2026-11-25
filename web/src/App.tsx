@@ -10,6 +10,7 @@ import Audit from './pages/Audit'
 import ChangePassword from './pages/ChangePassword'
 import CustomerWallets from './pages/CustomerWallets'
 import Dashboard from './pages/Dashboard'
+import DeviceDirectory from './pages/DeviceDirectory'
 import Dispensers from './pages/Dispensers'
 import FCCDevices from './pages/FCCDevices'
 import FleetManagement from './pages/FleetManagement'
@@ -95,6 +96,7 @@ export default function App() {
             <Route index element={<Protected module="dashboard"><Dashboard /></Protected>} />
             <Route path="quick-setup" element={<Protected><QuickSetup /></Protected>} />
             <Route path="locations" element={<Protected module="stations"><LocationBrowser /></Protected>} />
+            <Route path="device-directory" element={<Protected module="stations"><DeviceDirectory /></Protected>} />
             <Route path="forecourt" element={<Protected module="dispensers"><Forecourt /></Protected>} />
             <Route path="transactions" element={<Protected module="transactions"><Transactions /></Protected>} />
             <Route path="stations" element={<Protected module="stations"><Stations /></Protected>} />
