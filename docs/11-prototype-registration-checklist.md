@@ -1,0 +1,103 @@
+# 11 — Prototype registration checklist
+
+Do these **in order**. Each record must exist before the next one. The backend
+rejects assignments to nonexistent or cross-station equipment.
+
+## 0. Log in as the Superior Administrator
+
+`SUPERADMIN001` / `Admin@1234`. A manager without `dispensers:create` will not
+even see the **+ Register Dispenser** button.
+
+## 1. Station — required first
+
+Stations → **Register station**. Minimum: code, name, country, state, LGA, city,
+address, GPS latitude/longitude, manager name + phone, supervisor name + phone.
+A station must exist before a dispenser, tank, FCC or POS terminal.
+
+## 2. Pump type (optional but recommended)
+
+Dispensers → **Pump Type Management** → add e.g. `WAYNE_IGEM` / `Wayne iGEM`.
+These become available in the dispenser dropdown.
+
+## 3. Dispenser / pump
+
+Dispensers → **+ Register Dispenser**:
+
+| Field | Rule |
+|---|---|
+| Assigned station | must already exist; dropdown is populated from `/stations` |
+| Dispenser code | required, unique within the station |
+| Name / serial | optional, serial unique if supplied |
+| Manufacturer | Wayne, Veeder-Root, Gilbarco, Tatsuno, Tokheim, Bennett or Other |
+| Pump type | from step 2 |
+| Nozzle configuration | **Single** = 1 record, **Double** = 2 records, **Other** = your count (1–12) |
+| Nozzle 1 / 2 price | ₦/L, becomes the nozzle's selling price |
+
+Creating a **Double** configuration automatically creates Nozzle 1 and Nozzle 2
+with separate IDs, prices, FCC mappings and reconciliation history.
+
+If this fails, the error banner shows the backend reason. The usual causes are:
+- no station registered / no station selected
+- duplicate dispenser code at that station
+- duplicate serial number
+- logged in as a user without `dispensers:create`
+- "Other" manufacturer selected without a custom name
+
+## 4. Tank
+
+Tanks → register with station, code, capacity, product, and (for the bench)
+calibration rows. Add the tank controller UID here if you have one.
+
+## 5. POS terminal
+
+Payments → **Terminals** → register with station and, if known, the nozzle it
+belongs to. Used by the OPay `sn` mapping.
+
+## 6. FCC Controller — one per nozzle
+
+FCC Controllers → **+ Register FCC**:
+
+1. Select station
+2. Select a dispenser **of that station**
+3. Select a nozzle **of that dispenser**
+4. Select the POS terminal **of that station**
+5. Enter the unique `device_uid` used in the ESP32 sketch
+6. Set calibration (pulses/L) and connection mode
+
+The backend validates the whole hierarchy. Cross-station or cross-dispenser
+assignments are rejected with 400/403.
+
+## 7. Provision the device credential
+
+After registration, call the provisioning endpoint (admin token):
+
+```
+POST /api/v1/device-ingest/provision/fcc/{fcc_id}
+```
+
+Store the returned one-time credential in the ESP32 sketch. Do not paste it in
+chat or commit it.
+
+## 8. Verify the chain
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m tests.check_dispenser_create
+.\.venv\Scripts\python.exe -m tests.check_opay_flow
+```
+
+`check_opay_flow` proves: initiate → OPay webhook → VERIFIED → device command →
+completion. `check_dispenser_create` proves station → dispenser → nozzles.
+
+## Common failures
+
+| Symptom | Cause |
+|---|---|
+| "+ Register Dispenser" button missing | user lacks `dispensers:create` |
+| Station dropdown empty | no station registered, or scope excludes all stations |
+| `400 Dispenser code is required` | code left blank |
+| `409 Dispenser code already exists` | duplicate code at the same station |
+| `409 serial number already registered` | duplicate serial |
+| `400 nozzle_config must be SINGLE, DOUBLE or OTHER` | old client sending bad config |
+| FCC registration 400/403 | station/dispenser/nozzle hierarchy mismatch |
+| No `PAYMENT_SUCCESS` command | device UID in sketch differs from registered FCC UID |
