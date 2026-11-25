@@ -17,7 +17,8 @@ from app.core.validation import utcnow
 from app.db.base import get_db
 from app.models.auth import User
 from app.models.core import (
-    Customer, Dispenser, FCCDevice, FuelProduct, Nozzle, RFIDCard, Station, Tank, Wallet,
+    Customer, Dispenser, FCCDevice, FuelProduct, Nozzle, RFIDCard, Station, Tank,
+    TankController, Wallet,
 )
 
 router = APIRouter(prefix="/api/v1/simple", tags=["simple-setup"])
@@ -39,6 +40,34 @@ def status(db: Session = Depends(get_db), _: User = Depends(require_permission("
         "nozzles": count(Nozzle), "tanks": count(Tank),
         "controllers": count(FCCDevice), "cards": count(RFIDCard),
     }
+
+
+@router.get("/connected")
+def connected_devices(db: Session = Depends(get_db), _: User = Depends(require_permission("dashboard", "view"))):
+    """Compact list for the live device ticker (UID + location + link state)."""
+    result = []
+    for fcc in db.scalars(select(FCCDevice)).all():
+        station = db.scalar(select(Station).where(Station.id == fcc.station_id))
+        result.append({
+            "kind": "FCC", "uid": fcc.device_uid,
+            "station": station.name if station else "",
+            "state": station.state.name if station and station.state else "",
+            "lga": station.lga.name if station and station.lga else "",
+            "online": bool(fcc.is_online),
+            "last_seen": fcc.last_heartbeat.isoformat() if fcc.last_heartbeat else None,
+        })
+    for tank in db.scalars(select(Tank)).all():
+        station = db.scalar(select(Station).where(Station.id == tank.station_id))
+        controller = db.scalar(select(TankController).where(TankController.tank_id == tank.id))
+        result.append({
+            "kind": "TANK", "uid": controller.device_uid if controller else tank.code,
+            "station": station.name if station else "",
+            "state": station.state.name if station and station.state else "",
+            "lga": station.lga.name if station and station.lga else "",
+            "online": bool(controller.is_online) if controller else False,
+            "last_seen": controller.last_heartbeat.isoformat() if controller and controller.last_heartbeat else None,
+        })
+    return result
 
 
 @router.post("/setup")

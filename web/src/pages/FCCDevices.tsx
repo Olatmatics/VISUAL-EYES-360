@@ -51,25 +51,13 @@ export default function FCCDevices() {
     e.preventDefault()
     setError(''); setSuccess('')
     try {
-      await api.post('/fcc-devices', {
+      await api.post('/quick/fcc', {
         device_uid: form.device_uid.trim(),
-        name: form.name.trim() || undefined,
-        serial_number: form.serial_number.trim() || undefined,
-        hardware_version: form.hardware_version.trim() || undefined,
-        firmware_version: form.firmware_version.trim() || undefined,
         station_id: form.station_id,
-        dispenser_id: form.dispenser_id,
-        nozzle_id: form.nozzle_id,
-        pos_terminal_id: form.pos_terminal_id || undefined,
-        protocol: form.protocol.trim() || undefined,
-        connection_mode: form.connection_mode,
-        sim_info: form.sim_info.trim() || undefined,
-        calibration_factor: Number(form.calibration_factor),
-        status: form.status,
       })
       setCreating(false)
       setForm({ ...emptyForm, station_id: form.station_id })
-      setSuccess('FCC Controller registered. Provision its credential before hardware can send telemetry.')
+      setSuccess('FCC Controller registered and assigned to a free nozzle. Provision its credential before hardware can send telemetry.')
       load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register FCC Controller')
@@ -132,53 +120,17 @@ export default function FCCDevices() {
       {creating && (
         <Modal title="Register FCC Controller" onClose={() => setCreating(false)}>
           <form onSubmit={handleCreate} style={{ display: 'grid', gap: '12px' }}>
-            <div className="form-grid">
-              <Input label="Controller device UID" placeholder="e.g. FCC-DEV-A" value={form.device_uid}
-                onChange={(e) => setForm({ ...form, device_uid: e.target.value })} required />
-              <Input label="Display name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <Input label="Serial number" value={form.serial_number} onChange={(e) => setForm({ ...form, serial_number: e.target.value })} />
-              <Input label="Hardware version" value={form.hardware_version} onChange={(e) => setForm({ ...form, hardware_version: e.target.value })} />
-              <Input label="Firmware version" value={form.firmware_version} onChange={(e) => setForm({ ...form, firmware_version: e.target.value })} />
-              <Input label="Calibration (pulses/L)" type="number" step="0.01" value={form.calibration_factor}
-                onChange={(e) => setForm({ ...form, calibration_factor: e.target.value })} required />
-            </div>
+            <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+              Only the UID in your ESP32 sketch is needed. A free nozzle is assigned automatically.
+            </p>
+            <Input label="Controller UID" placeholder="e.g. FCC-DEV-A" value={form.device_uid}
+              onChange={(e) => setForm({ ...form, device_uid: e.target.value })} required />
             <label className="field"><span>Station</span>
-              <select value={form.station_id} required onChange={(e) => setForm({ ...form, station_id: e.target.value, dispenser_id: '', nozzle_id: '', pos_terminal_id: '' })}>
+              <select value={form.station_id} required onChange={(e) => setForm({ ...form, station_id: e.target.value })}>
                 <option value="">Select station</option>
                 {stations.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
               </select>
             </label>
-            <div className="form-grid">
-              <label className="field"><span>Dispenser</span>
-                <select value={form.dispenser_id} required disabled={!form.station_id}
-                  onChange={(e) => setForm({ ...form, dispenser_id: e.target.value, nozzle_id: '', pos_terminal_id: '' })}>
-                  <option value="">Select dispenser</option>
-                  {dispensersForStation.map((d) => <option key={d.id} value={d.id}>{d.code} · {d.brand || d.manufacturer}</option>)}
-                </select>
-              </label>
-              <label className="field"><span>Nozzle</span>
-                <select value={form.nozzle_id} required disabled={!form.dispenser_id}
-                  onChange={(e) => setForm({ ...form, nozzle_id: e.target.value })}>
-                  <option value="">Select nozzle</option>
-                  {nozzlesForDispenser.map((n) => <option key={n.id} value={n.id}>Nozzle {n.number} · ₦{n.price}/L</option>)}
-                </select>
-              </label>
-              <label className="field"><span>OPay POS terminal</span>
-                <select value={form.pos_terminal_id} disabled={!form.station_id}
-                  onChange={(e) => setForm({ ...form, pos_terminal_id: e.target.value })}>
-                  <option value="">None (assign later)</option>
-                  {terminalsForStation.map((t) => <option key={t.id} value={t.id}>{t.terminal_id} · {t.dispenser_code || 'unassigned'}</option>)}
-                </select>
-              </label>
-              <label className="field"><span>Connection mode</span>
-                <select value={form.connection_mode} onChange={(e) => setForm({ ...form, connection_mode: e.target.value })}>
-                  <option value="WIFI">Wi-Fi (primary)</option>
-                  <option value="SIM">SIM cellular</option>
-                </select>
-              </label>
-              <Input label="Protocol" value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value })} />
-              <Input label="SIM / network info" value={form.sim_info} onChange={(e) => setForm({ ...form, sim_info: e.target.value })} />
-            </div>
             <Button type="submit">Register FCC Controller</Button>
           </form>
         </Modal>

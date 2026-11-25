@@ -529,6 +529,28 @@ table tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transpa
 .quick-grid .card { display: grid; gap: 10px; align-content: start; }
 .quick-grid .muted { margin: 0; font-size: 12px; }
 
+.device-ticker {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--sidebar); color: #cfe3f5;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  height: 34px; padding: 0 16px; overflow: hidden;
+}
+.ticker-label {
+  flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  color: #7ee2b8; white-space: nowrap;
+}
+.ticker-window { flex: 1; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
+.ticker-track {
+  display: inline-block; white-space: nowrap; font-size: 12px;
+  animation: tickerScroll 60s linear infinite;
+}
+.device-ticker:hover .ticker-track { animation-play-state: paused; }
+@keyframes tickerScroll {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+@media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; } }
+
 .inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .inventory-item {
   border: 1px solid var(--border); border-radius: 9px; padding: 12px;

@@ -51,7 +51,9 @@ export default function Tanks() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      await api.post('/tanks', form)
+      await api.post('/quick/tank', {
+        station_id: form.station_id, capacity_l: Number(form.capacity_l),
+      })
       setCreating(false)
       load()
     } catch (err) {
@@ -170,11 +172,10 @@ export default function Tanks() {
               </select>
             </label>
             <Input
-              label="Tank Code"
-              placeholder="e.g. TANK-03-AGO"
+              label="Tank Code (generated if left blank)"
+              placeholder="Auto"
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value })}
-              required
             />
             <label className="field">
               <span>Fuel Product</span>
@@ -196,7 +197,6 @@ export default function Tanks() {
               type="number"
               value={form.initial_volume_l}
               onChange={(e) => setForm({ ...form, initial_volume_l: e.target.value })}
-              required
             />
             <Button type="submit">Create Storage Tank</Button>
           </form>

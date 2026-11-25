@@ -71,21 +71,10 @@ export default function Dispensers() {
       price: Number(i === 0 ? form.price_1 : form.price_2 || form.price_1),
     }))
     try {
-      await api.post('/dispensers', {
+      await api.post('/quick/pump', {
         station_id: form.station_id,
-        code: form.code.trim(),
-        name: form.name.trim() || undefined,
-        serial: form.serial.trim() || undefined,
-        manufacturer: form.manufacturer,
-        custom_manufacturer: form.manufacturer === 'Other' ? form.custom_manufacturer : undefined,
-        model: form.model.trim() || undefined,
-        pump_type_id: form.pump_type_id || undefined,
         nozzle_config: form.nozzle_config,
-        nozzle_count: count,
-        nozzles,
-        protocol: form.protocol.trim() || undefined,
-        interface: form.interface.trim() || undefined,
-        status: form.status,
+        price: Number(form.price_1),
       })
       setCreating(false)
       setForm({ ...emptyForm(), station_id: form.station_id })
@@ -187,8 +176,8 @@ export default function Dispensers() {
               </select>
             </label>
             <div className="form-grid">
-              <Input label="Dispenser code" placeholder="e.g. DISP-02" value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })} required />
+              <Input label="Dispenser code (generated if left blank)" placeholder="Auto" value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })} />
               <Input label="Display name" placeholder="e.g. Pump 1 - Diesel" value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <Input label="Serial number" placeholder="Optional" value={form.serial}

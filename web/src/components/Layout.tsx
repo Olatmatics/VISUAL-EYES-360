@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import DeviceTicker from './DeviceTicker'
 
 type NavItem = { to: string; label: string; module: string; action: string; icon: string; section?: string }
 
@@ -108,6 +109,7 @@ export default function Layout() {
             </button>
           </div>
         </header>
+        <DeviceTicker />
         <main className="content">
           <Outlet />
         </main>
