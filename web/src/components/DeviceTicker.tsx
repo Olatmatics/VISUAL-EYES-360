@@ -21,18 +21,19 @@ export default function DeviceTicker() {
     return () => window.clearInterval(timer)
   }, [])
 
-  if (devices.length === 0) return null
-  const online = devices.filter((d) => d.online).length
-  const line = devices.map((d) => {
+  const onlineDevices = devices.filter((d) => d.online)
+  const line = onlineDevices.map((d) => {
     const place = [d.lga, d.state].filter(Boolean).join(', ') || d.station
-    return `${d.kind} ${d.uid} · ${d.station} (${place}) · ${d.online ? 'ONLINE' : 'OFFLINE'}`
+    return `${d.kind} ${d.uid} · ${d.station} (${place}) · ONLINE`
   }).join('   ◆   ')
 
   return (
-    <div className="device-ticker" title={`${online}/${devices.length} controllers online`}>
-      <span className="ticker-label">● {online}/{devices.length} ONLINE</span>
+    <div className="device-ticker" title={`${onlineDevices.length} controller(s) online`}>
+      <span className="ticker-label">● {onlineDevices.length} ONLINE</span>
       <div className="ticker-window">
-        <div className="ticker-track">{line} &nbsp;&nbsp; ◆ &nbsp;&nbsp; {line}</div>
+        <div className="ticker-track">
+          {onlineDevices.length ? `${line}   ◆   ${line}` : 'No controllers online'}
+        </div>
       </div>
     </div>
   )

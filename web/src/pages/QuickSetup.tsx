@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Badge, Button, Card, ErrorBanner, Input, PageHeader } from '../components/ui'
+import type { GeoLga, GeoState } from '../types'
 
 type Result = {
   ok: boolean
   message: string
   summary: string
   station: { id: string; name: string; code: string; created: boolean }
-  pumps: { id: string; code: string; nozzles: string[] }[]
+  pumps: { id: string; code: string; name?: string; nozzles: string[] }[]
   tanks: { id: string; code: string }[]
-  controllers: { uid: string; status: string; nozzle_id?: string }[]
+  controllers: { uid: string; status: string; nozzle_id?: string; pump?: string; nozzle?: number }[]
   cards: { uid: string; status: string }[]
 }
 
@@ -20,14 +21,36 @@ export default function QuickSetup() {
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [states, setStates] = useState<GeoState[]>([])
+  const [lgas, setLgas] = useState<GeoLga[]>([])
   const [form, setForm] = useState({
-    station_name: '', pump_count: '1', nozzles_per_pump: '2',
+    station_name: '', state_id: '', lga_id: '', city: '', address: '',
+    manager_name: '', manager_phone: '', supervisor_name: '', supervisor_phone: '',
+    pump_count: '1', nozzles_per_pump: '2',
     price_per_litre: '1000', tank_capacity_l: '30000',
     controller_uids: '', card_uid: '',
   })
 
   const load = () => api.get<Status>('/simple/status').then(setStatus).catch(() => setStatus(null))
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api.get<GeoState[]>('/geo/states').then(setStates).catch(() => setStates([]))
+  }, [])
+  useEffect(() => {
+    if (!form.state_id) { setLgas([]); return }
+    api.get<GeoLga[]>(`/geo/states/${form.state_id}/lgas`).then(setLgas).catch(() => setLgas([]))
+  }, [form.state_id])
+
+  const resetAll = async () => {
+    setBusy(true); setError(''); setResult(null)
+    try {
+      const r = await api.post<{ message: string }>('/simple/reset')
+      setResult({ ok: true, message: r.message, summary: '', station: { id: '', name: '', code: '', created: false }, pumps: [], tanks: [], controllers: [], cards: [] })
+      load()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Reset failed') }
+    finally { setBusy(false); setConfirmReset(false) }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,6 +79,19 @@ export default function QuickSetup() {
             style={{ fontSize: 16, padding: '12px 20px' }}>
             {busy ? 'Setting up…' : '✓ Set Up Everything'}
           </Button>
+          {confirmReset ? (
+            <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ color: 'var(--danger)', fontSize: 13, fontWeight: 600 }}>
+                Delete all stations, pumps, tanks, controllers and cards?
+              </span>
+              <Button variant="danger" onClick={resetAll} disabled={busy}>Yes, clear everything</Button>
+              <Button variant="secondary" onClick={() => setConfirmReset(false)}>Cancel</Button>
+            </span>
+          ) : (
+            <Button variant="ghost" onClick={() => setConfirmReset(true)} disabled={busy}>
+              Clear all data and start fresh
+            </Button>
+          )}
           {error && <div className="action-error">{error}</div>}
           {result?.ok && <div className="notice-success" style={{ margin: 0, flex: 1 }}>
             ✓ {result.message} {result.summary}
@@ -92,6 +128,26 @@ export default function QuickSetup() {
           <Input label="1. Station name" placeholder="e.g. Abuja Main Station"
             value={form.station_name}
             onChange={(e) => setForm({ ...form, station_name: e.target.value })} required />
+          <div className="form-grid">
+            <label className="field"><span>State / FCT</span>
+              <select value={form.state_id} onChange={(e) => setForm({ ...form, state_id: e.target.value, lga_id: '' })}>
+                <option value="">Not specified</option>
+                {states.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>LGA</span>
+              <select value={form.lga_id} disabled={!form.state_id} onChange={(e) => setForm({ ...form, lga_id: e.target.value })}>
+                <option value="">Not specified</option>
+                {lgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </label>
+            <Input label="City / Town" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <Input label="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            <Input label="Manager name" value={form.manager_name} onChange={(e) => setForm({ ...form, manager_name: e.target.value })} />
+            <Input label="Manager phone" value={form.manager_phone} onChange={(e) => setForm({ ...form, manager_phone: e.target.value })} />
+            <Input label="Supervisor name" value={form.supervisor_name} onChange={(e) => setForm({ ...form, supervisor_name: e.target.value })} />
+            <Input label="Supervisor phone" value={form.supervisor_phone} onChange={(e) => setForm({ ...form, supervisor_phone: e.target.value })} />
+          </div>
 
           <div className="form-grid">
             <Input label="2. How many pumps?" type="number" min={1} max={10}
@@ -134,13 +190,13 @@ export default function QuickSetup() {
           <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
             <div><strong>Station:</strong> {result.station.name} — code <code>{result.station.code}</code></div>
             {result.pumps.map((p, i) => (
-              <div key={p.id}><strong>Pump {i + 1}:</strong> <code>{p.code}</code> — {p.nozzles.length} nozzle(s)</div>
+              <div key={p.id}><strong>{p.name || `Pump ${i + 1}`}:</strong> <code>{p.code}</code> — {p.nozzles.length} nozzle(s)</div>
             ))}
             {result.tanks.map((t, i) => (
               <div key={t.id}><strong>Tank {i + 1}:</strong> <code>{t.code}</code></div>
             ))}
             {result.controllers.map((c) => (
-              <div key={c.uid}><strong>Controller:</strong> <code>{c.uid}</code> — {c.status}</div>
+              <div key={c.uid}><strong>Controller:</strong> <code>{c.uid}</code> — {c.pump || ''} nozzle {c.nozzle || ''} — {c.status}</div>
             ))}
             {result.cards.map((c) => (
               <div key={c.uid}><strong>Card:</strong> <code>{c.uid}</code> — {c.status}</div>

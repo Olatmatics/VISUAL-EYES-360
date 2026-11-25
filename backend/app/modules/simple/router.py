@@ -9,16 +9,20 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import require_permission
+from app.core.deps import require_permission, require_super_admin
 from app.core.validation import utcnow
 from app.db.base import get_db
-from app.models.auth import User
+from app.models.auth import AuditLog, LoginSession, RefreshToken, User
 from app.models.core import (
-    Customer, Dispenser, FCCDevice, FuelProduct, Nozzle, RFIDCard, Station, Tank,
-    TankController, Wallet,
+    Customer, DeviceCommand, DeviceEvent, Dispenser, FCCDevice, FuelProduct,
+    MaintenanceRecord, Nozzle, Notification, PaymentRecord, POSTerminal,
+    PumpReconciliation, PriceHistory, RFIDCard,
+    Station, SystemAlert, Tank, TankCalibration, TankController, TankDelivery,
+    TankReading, TankReconciliation, TankSensor, Wallet, WalletLedgerEntry,
+    FuelTransaction,
 )
 
 router = APIRouter(prefix="/api/v1/simple", tags=["simple-setup"])
@@ -70,6 +74,26 @@ def connected_devices(db: Session = Depends(get_db), _: User = Depends(require_p
     return result
 
 
+@router.post("/reset")
+def reset_operational_data(db: Session = Depends(get_db), _: User = Depends(require_super_admin)):
+    """Wipe operational records so the owner can register everything from scratch.
+
+    Reference data is preserved: users, roles, permissions, states, LGAs, fuel
+    products and pump types.
+    """
+    for model in (
+        DeviceEvent, DeviceCommand, Notification, FuelTransaction, PaymentRecord,
+        SystemAlert, TankReading, TankCalibration, TankSensor, TankReconciliation,
+        PumpReconciliation, TankDelivery, MaintenanceRecord, PriceHistory,
+        Nozzle, Dispenser, Tank, FCCDevice, TankController, POSTerminal,
+        WalletLedgerEntry, Wallet, RFIDCard, Customer, AuditLog,
+        LoginSession, RefreshToken, Station,
+    ):
+        db.execute(delete(model))
+    db.commit()
+    return {"ok": True, "message": "All operational data cleared. Reference data kept."}
+
+
 @router.post("/setup")
 def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_db),
           _: User = Depends(require_permission("stations", "create"))):
@@ -83,6 +107,11 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
         station = Station(
             id=str(uuid.uuid4()), code=_code(db, Station, "ST", Station.code),
             name=name, country="Nigeria", status="ACTIVE", registered_at=utcnow(),
+            state_id=payload.get("state_id"), lga_id=payload.get("lga_id"),
+            city=payload.get("city"), address=payload.get("address"),
+            manager_name=payload.get("manager_name"), manager_phone=payload.get("manager_phone"),
+            supervisor_name=payload.get("supervisor_name"),
+            supervisor_phone=payload.get("supervisor_phone"),
         )
         db.add(station)
         db.flush()
@@ -95,11 +124,12 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
 
     pumps = []
     nozzles = []
-    for _ in range(pump_count):
+    nozzle_pumps: dict[str, int] = {}
+    for pump_index in range(pump_count):
         dispenser = Dispenser(
             id=str(uuid.uuid4()), station_id=station.id,
             code=_code(db, Dispenser, "PMP", Dispenser.code),
-            name=f"Pump {len(pumps) + 1}", serial=f"DSP-{uuid.uuid4().hex[:8].upper()}",
+            name=f"Pump {pump_index + 1}", serial=f"DSP-{uuid.uuid4().hex[:8].upper()}",
             manufacturer="Wayne", model="Prototype",
             nozzle_config="DOUBLE" if nozzle_count == 2 else "SINGLE",
             nozzle_count=nozzle_count, status="ACTIVE", installation_date=utcnow(),
@@ -116,15 +146,16 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
             db.flush()
             nozzles.append(nozzle)
             nozzle_records.append(nozzle)
+            nozzle_pumps[nozzle.id] = pump_index + 1
         pumps.append({"id": dispenser.id, "code": dispenser.code,
-                      "nozzles": [n.id for n in nozzle_records]})
+                      "name": dispenser.name, "nozzles": [n.id for n in nozzle_records]})
 
     tanks = []
-    for _ in range(pump_count):
+    for tank_index in range(pump_count):
         tank = Tank(
             id=str(uuid.uuid4()), station_id=station.id,
             code=_code(db, Tank, "TK", Tank.code),
-            name="Fuel tank", product_id=product.id if product else None,
+            name=f"Tank {tank_index + 1}", product_id=product.id if product else None,
             capacity_l=capacity, current_volume_l=0,
             status="ACTIVE", location_type="UNDERGROUND",
             installation_status="INSTALLED", installation_date=utcnow(),
@@ -145,13 +176,17 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
         if existing:
             controllers.append({"uid": uid, "status": "already registered"})
             continue
+        if not uid:
+            continue
+        if "_" not in uid and "-" not in uid and not uid.lower().startswith(("fcc", "tk")):
+            uid = f"FCC_{uid}"
         if i < len(nozzles):
             nozzle = nozzles[i]
         else:
             extra = Dispenser(
                 id=str(uuid.uuid4()), station_id=station.id,
                 code=_code(db, Dispenser, "PMP", Dispenser.code),
-                name=f"Pump {len(pumps) + 1}", serial=f"DSP-{uuid.uuid4().hex[:8].upper()}",
+                name=f"Pump {pump_index + 1}", serial=f"DSP-{uuid.uuid4().hex[:8].upper()}",
                 manufacturer="Wayne", nozzle_config="SINGLE", nozzle_count=1,
                 status="ACTIVE", installation_date=utcnow(),
             )
@@ -162,14 +197,16 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
             db.add(nozzle)
             db.flush()
             pumps.append({"id": extra.id, "code": extra.code, "nozzles": [nozzle.id]})
+        pump_no = nozzle_pumps.get(nozzle.id, i + 1)
         fcc = FCCDevice(
-            id=str(uuid.uuid4()), device_uid=uid, name=f"FCC {uid}",
+            id=str(uuid.uuid4()), device_uid=uid, name=f"FCC Pump {pump_no} N{nozzle.number}",
             station_id=station.id, dispenser_id=nozzle.dispenser_id, nozzle_id=nozzle.id,
             firmware_version="v1.0.0", connection_mode="WIFI",
             calibration_factor=1, status="ACTIVE", is_online=False,
         )
         db.add(fcc)
-        controllers.append({"uid": uid, "status": "registered", "nozzle_id": nozzle.id})
+        controllers.append({"uid": uid, "status": "registered", "nozzle_id": nozzle.id,
+                            "pump": f"Pump {pump_no}", "nozzle": nozzle.number})
 
     cards = []
     raw_card = payload.get("card_uid")
@@ -177,6 +214,8 @@ def setup(payload: dict[str, Any], request: Request, db: Session = Depends(get_d
         uid = str(raw_card).strip().upper()
         card = db.scalar(select(RFIDCard).where(RFIDCard.card_uid == uid))
         if card is None:
+            if "_" not in uid and "-" not in uid and not uid.lower().startswith("rfid"):
+                uid = f"RFID_{uid}"
             customer = Customer(
                 id=str(uuid.uuid4()), full_name=f"Driver {uid[-6:]}",
                 phone=f"RFID-{uid}", category="SPECIAL_CUSTOMER", is_active=True,

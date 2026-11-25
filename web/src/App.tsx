@@ -55,7 +55,6 @@ function NotFound() {
 function MotionShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' })
     const nodes = document.querySelectorAll<HTMLElement>('.reveal')
     if (!('IntersectionObserver' in window)) {
       nodes.forEach((node) => node.classList.add('is-visible'))
