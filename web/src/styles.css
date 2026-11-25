@@ -525,6 +525,10 @@ table tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transpa
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 45%, transparent); border-radius: 99px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.quick-grid .card { display: grid; gap: 10px; align-content: start; }
+.quick-grid .muted { margin: 0; font-size: 12px; }
+
 .notice-success {
   background: color-mix(in srgb, var(--success) 12%, transparent);
   border: 1px solid var(--success); color: var(--success);

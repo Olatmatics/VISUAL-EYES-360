@@ -151,7 +151,6 @@ export default function Stations() {
                 <span>State</span>
                 <select
                   value={form.state_id}
-                  required
                   onChange={(e) => {
                     const stateId = e.target.value
                     setForm((prev) => ({ ...prev, state_id: stateId, lga_id: '' }))
@@ -166,7 +165,6 @@ export default function Stations() {
                 <span>LGA</span>
                 <select
                   value={form.lga_id}
-                  required
                   onChange={(e) => setForm((prev) => ({ ...prev, lga_id: e.target.value }))}
                   disabled={!form.state_id}
                 >
@@ -176,7 +174,7 @@ export default function Stations() {
               </label>
             </div>
             <div className="form-grid">
-              <Input label="City / town" value={form.city} onChange={update('city')} required />
+              <Input label="City / town" value={form.city} onChange={update('city')} />
               <label className="field">
                 <span>Status</span>
                 <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
@@ -188,23 +186,23 @@ export default function Stations() {
                 </select>
               </label>
             </div>
-            <Input label="Address" value={form.address} onChange={update('address')} required />
+            <Input label="Address" value={form.address} onChange={update('address')} />
             <div className="form-grid">
-              <Input label="GPS latitude" type="number" step="any" value={form.gps_lat} onChange={update('gps_lat')} required />
-              <Input label="GPS longitude" type="number" step="any" value={form.gps_lng} onChange={update('gps_lng')} required />
+              <Input label="GPS latitude" type="number" step="any" value={form.gps_lat} onChange={update('gps_lat')} />
+              <Input label="GPS longitude" type="number" step="any" value={form.gps_lng} onChange={update('gps_lng')} />
             </div>
             <div className="form-grid">
               <Input label="General phone" value={form.phone} onChange={update('phone')} />
               <Input label="General email" type="email" value={form.email} onChange={update('email')} />
             </div>
             <div className="form-grid">
-              <Input label="Station manager" value={form.manager_name} onChange={update('manager_name')} required />
-              <Input label="Manager phone" value={form.manager_phone} onChange={update('manager_phone')} required />
+              <Input label="Station manager" value={form.manager_name} onChange={update('manager_name')} />
+              <Input label="Manager phone" value={form.manager_phone} onChange={update('manager_phone')} />
               <Input label="Manager email" type="email" value={form.manager_email} onChange={update('manager_email')} />
             </div>
             <div className="form-grid">
-              <Input label="Station supervisor" value={form.supervisor_name} onChange={update('supervisor_name')} required />
-              <Input label="Supervisor phone" value={form.supervisor_phone} onChange={update('supervisor_phone')} required />
+              <Input label="Station supervisor" value={form.supervisor_name} onChange={update('supervisor_name')} />
+              <Input label="Supervisor phone" value={form.supervisor_phone} onChange={update('supervisor_phone')} />
               <Input label="Supervisor email" type="email" value={form.supervisor_email} onChange={update('supervisor_email')} />
             </div>
             {!editing && <Input label="Primary contact person" value={form.contact_person} onChange={update('contact_person')} />}
