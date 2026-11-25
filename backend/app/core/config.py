@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     TELEMETRY_RETENTION_MONTHS: int = 12
     DEVICE_OFFLINE_AFTER_MINUTES: int = 15
 
+    # ---- OPay POS gateway (prototype integration) ------------------------
+    # Secrets are supplied through the environment / .env, never in code.
+    OPAY_ENV: str = "staging"
+    OPAY_BASE_URL: str = "https://testapi.opaycheckout.com"
+    OPAY_MERCHANT_ID: str = ""
+    OPAY_PRIVATE_KEY: str = ""
+    OPAY_PUBLIC_KEY: str = ""
+    OPAY_WEBHOOK_URL: str = "http://127.0.0.1:8000/api/v1/opay/webhook"
+    USE_MOCK_OPAY_GATEWAY: bool = True
+    MOCK_OPAY_URL: str = "http://127.0.0.1:8000/mock-opay"
+
     @model_validator(mode="after")
     def require_production_secrets(self):
         if self.ENVIRONMENT.lower() in {"production", "prod", "live"}:

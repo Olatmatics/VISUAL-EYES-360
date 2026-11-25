@@ -19,6 +19,9 @@ from app.modules.device_ingest.router import router as device_ingest_router
 from app.modules.forecourt.router import router as forecourt_router
 from app.modules.geo.router import router as geo_router
 from app.modules.operations.router import router as operations_router
+from app.modules.prototype.router import router as prototype_router
+from app.modules.payments.mock_opay_router import router as mock_opay_router
+from app.modules.payments.opay_router import router as opay_router
 from app.modules.payments.router import router as payments_router
 from app.modules.prices.router import router as prices_router
 from app.modules.reconciliation.router import router as reconciliation_router
@@ -74,6 +77,9 @@ for router in (
     reports_router,
     reports_exports_router,
     settings_router,
+    opay_router,
+    mock_opay_router,
+    prototype_router,
 ):
     app.include_router(router)
 

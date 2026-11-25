@@ -18,6 +18,7 @@ from app.models.auth import (
 )
 from app.models.core import (
     Customer,
+    DeviceCommand,
     DeviceEvent,
     Dispenser,
     FCCDevice,
@@ -53,6 +54,7 @@ __all__ = [
     "AccountStatusHistory",
     "AuditLog",
     "Customer",
+    "DeviceCommand",
     "DeviceEvent",
     "Dispenser",
     "FCCDevice",

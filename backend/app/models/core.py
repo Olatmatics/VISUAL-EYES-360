@@ -504,6 +504,7 @@ class PaymentRecord(Base):
     provider: Mapped[str] = mapped_column(String(40), default="OPAY")
     payment_method: Mapped[str] = mapped_column(String(40), default="CARD_POS")  # CARD_POS, BANK_TRANSFER, WALLET
     status: Mapped[str] = mapped_column(String(30), default="INITIATED")  # INITIATED, VERIFIED, FAILED, REFUNDED
+    authorized_at: Mapped[datetime | None] = mapped_column(nullable=True)
     purpose: Mapped[str] = mapped_column(String(30), default="FUEL", index=True)  # FUEL, WALLET_FUNDING
     customer_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("customers.id"), nullable=True, index=True)
     pos_terminal_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -698,6 +699,18 @@ class DeviceEvent(Base):
     device_timestamp: Mapped[datetime | None] = mapped_column(nullable=True)
     received_at: Mapped[datetime] = mapped_column(default=utcnow, index=True, primary_key=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DeviceCommand(Base):
+    """Outbound command queued for a field controller (prototype transport)."""
+    __tablename__ = "device_commands"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    device_uid: Mapped[str] = mapped_column(String(64), index=True)
+    command_type: Mapped[str] = mapped_column(String(40), index=True)
+    payload_json: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    ack_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class SystemSetting(Base):
