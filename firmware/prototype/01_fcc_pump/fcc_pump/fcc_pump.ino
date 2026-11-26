@@ -20,6 +20,7 @@
  *   HELP | NOZZLE A|B | INIT 5000 (or INIT 5L) | POLL | ACK <id>
  *   COMPLETE <litres> | STATUS | RESET | HEARTBEAT | JSON ON|OFF
  *   CAL FETCH | CAL SET <pulses per litre>
+ *   NETWORK (show Wi-Fi + backend) | PING (test backend) | WIFI (retry now)
  *
  * The automatic heartbeat makes the web ticker show this controller online.
  * All request and response JSON is printed to Serial when JSON is ON.
@@ -94,11 +95,15 @@ unsigned long lastPoll = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastCalFetch = 0;
 unsigned long dispenseStart = 0;
+unsigned long lastWifiRetry = 0;
+bool wifiWasConnected = false;
 
 // Explicit prototypes. Arduino IDE sometimes misses IRAM_ATTR interrupt ISRs.
 void closeValves();
 void sendHeartbeat();
 void fetchCalibration();
+void printNetwork();
+void pingBackend();
 void IRAM_ATTR onPulseA();
 void IRAM_ATTR onPulseB();
 
@@ -144,6 +149,53 @@ void updateLeds() {
   }
 }
 
+// ---- Network diagnostics -----------------------------------------------------
+void printNetwork() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  Serial.println("---- NETWORK ----");
+  Serial.printf("SSID=%s  PASS=%s\n", wifiSsid.c_str(), wifiPass.length() ? "********" : "(empty)");
+  Serial.printf("STATUS=%s  IP=%s  RSSI=%d dBm\n", up ? "CONNECTED" : "OFFLINE",
+                up ? WiFi.localIP().toString().c_str() : "-", WiFi.RSSI());
+  Serial.printf("BACKEND=%s\n", backendUrl.c_str());
+  Serial.println("-----------------");
+}
+
+void pingBackend() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[PING] WiFi offline — type WIFI to retry");
+    return;
+  }
+  HTTPClient http;
+  http.begin(backendUrl + "/health");
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
+  markBackendActivity(1000);
+  int code = http.GET();
+  String body = http.getString();
+  http.end();
+  Serial.printf("[PING] GET /health -> %d  %s\n", code, body.c_str());
+}
+
+void ensureWiFi() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  if (up != wifiWasConnected) {
+    wifiWasConnected = up;
+    if (up) {
+      Serial.print("[WIFI] Connected IP="); Serial.println(WiFi.localIP().toString());
+      sendHeartbeat();
+    } else {
+      Serial.println("[WIFI] Link lost — reconnecting");
+    }
+  }
+  if (!up && millis() - lastWifiRetry > 10000) {
+    lastWifiRetry = millis();
+    Serial.print("[WIFI] Retry ");
+    WiFi.reconnect();
+    delay(50);
+    Serial.printf("status=%d\n", (int)WiFi.status());
+  }
+}
+
 // ---- Nozzle switch and pulse trigger helpers --------------------------------
 bool nozzleSwitchActive() {
   return activeNozzleChar == 'A'
@@ -178,25 +230,30 @@ void loadConfig() {
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
-  if (wifiSsid == "YOUR_WIFI" || wifiSsid.length() == 0) {
-    Serial.println("[WIFI] Not configured. Type: SET WIFI your-ssid|your-password  then REBOOT");
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+  if (wifiSsid.length() == 0 || wifiSsid == "YOUR_WIFI") {
+    Serial.println("[WIFI] Not configured. Type: SET WIFI your-ssid|your-password");
     return;
   }
+  Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 12000) {
     updateLeds();
     delay(500);
     Serial.print(".");
   }
   Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
+  wifiWasConnected = WiFi.status() == WL_CONNECTED;
+  if (wifiWasConnected) {
     Serial.print("[WIFI] OK IP=");
     Serial.println(WiFi.localIP().toString());
   } else {
-    Serial.println("[WIFI] Offline — Serial commands still work.");
+    Serial.println("[WIFI] Offline — it will retry automatically. Serial still works.");
+    Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
   }
+  printNetwork();
 }
 
 void setup() {
@@ -235,6 +292,8 @@ String requestJson(const char* method, const char* path, const String& body) {
   markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + path);
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
   http.addHeader("Content-Type", "application/json");
   int code;
   if (strcmp(method, "GET") == 0)       code = http.GET();
@@ -385,7 +444,12 @@ void applySetting(const String& key, const String& value) {
     if (sep < 1) { Serial.println("Use: SET WIFI ssid|password"); return; }
     saveCfg("ssid", value.substring(0, sep));
     saveCfg("pass", value.substring(sep + 1));
-    Serial.println("[SET] Wi-Fi saved. Type REBOOT to connect.");
+    wifiSsid = value.substring(0, sep);
+    wifiPass = value.substring(sep + 1);
+    Serial.println("[SET] Wi-Fi saved. Reconnecting now...");
+    WiFi.disconnect(false);
+    delay(200);
+    connectWiFi();
   } else if (key == "BACKEND") { saveCfg("backend", value); backendUrl = value; }
   else if (key == "STATION") { saveCfg("station", value); stationId = value; }
   else if (key == "NOZZLE_A") { saveCfg("nozA", value); nozzleAId = value; }
@@ -407,6 +471,7 @@ void handleSerial(String line) {
     Serial.println("SET DEVICE_A uid | SET DEVICE_B uid | SET POS sn | SET DISPENSER id | SET PRICE n | SET PPL n");
     Serial.println("CONFIG | REBOOT | NOZZLE A|B | INIT 5000 | INIT 5L | POLL | ACK id | COMPLETE L");
     Serial.println("STATUS | RESET | HEARTBEAT | JSON ON|OFF | CAL FETCH | CAL SET n");
+    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG");
     Serial.println("NOZZLE SWITCH: GPIO13(A)/GPIO12(B) to GND, Board 04 trigger on GPIO32");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
@@ -451,6 +516,9 @@ void handleSerial(String line) {
     Serial.println("[RESET] pulses and transaction cleared");
   }
   else if (line == "HEARTBEAT") { if (WiFi.status() == WL_CONNECTED) sendHeartbeat(); else Serial.println("[HEARTBEAT] WiFi offline"); }
+  else if (line == "NETWORK") printNetwork();
+  else if (line == "PING") pingBackend();
+  else if (line == "WIFI") { WiFi.disconnect(false); delay(200); connectWiFi(); }
   else if (line.startsWith("JSON ")) {
     jsonEcho = line.substring(5) == "ON";
     prefs.putBool("json", jsonEcho);
@@ -462,6 +530,7 @@ void handleSerial(String line) {
 
 void loop() {
   updateLeds();
+  ensureWiFi();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   // Sense the external nozzle-switch relay. Contact to GND = CLOSED/energised.

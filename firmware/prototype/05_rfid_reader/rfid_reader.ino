@@ -74,6 +74,8 @@ bool commLedOn = false;
 bool wifiLedOn = false;
 
 unsigned long registerStarted = 0;
+unsigned long lastWifiRetry = 0;
+bool wifiWasConnected = false;
 
 String cfg(const char* key, const char* def) {
   String v = prefs.getString(key, "");
@@ -125,25 +127,68 @@ void loadConfig() {
   jsonEcho   = prefs.getBool("json", true);
 }
 
+void printNetwork() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  Serial.println("---- NETWORK ----");
+  Serial.printf("SSID=%s  PASS=%s\n", wifiSsid.c_str(), wifiPass.length() ? "********" : "(empty)");
+  Serial.printf("STATUS=%s  IP=%s  RSSI=%d dBm\n", up ? "CONNECTED" : "OFFLINE",
+                up ? WiFi.localIP().toString().c_str() : "-", WiFi.RSSI());
+  Serial.printf("BACKEND=%s\n", backendUrl.c_str());
+  Serial.println("-----------------");
+}
+
+void pingBackend() {
+  if (WiFi.status() != WL_CONNECTED) { Serial.println("[PING] WiFi offline — type WIFI to retry"); return; }
+  HTTPClient http;
+  http.begin(backendUrl + "/health");
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
+  markBackendActivity(1000);
+  int code = http.GET();
+  String body = http.getString();
+  http.end();
+  Serial.printf("[PING] GET /health -> %d  %s\n", code, body.c_str());
+}
+
+void ensureWiFi() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  if (up != wifiWasConnected) {
+    wifiWasConnected = up;
+    Serial.println(up ? "[WIFI] Connected" : "[WIFI] Link lost — reconnecting");
+  }
+  if (!up && millis() - lastWifiRetry > 10000) {
+    lastWifiRetry = millis();
+    Serial.print("[WIFI] Retry ");
+    WiFi.reconnect();
+    delay(50);
+    Serial.printf("status=%d\n", (int)WiFi.status());
+  }
+}
+
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
-  if (wifiSsid == "YOUR_WIFI" || wifiSsid.length() == 0) {
-    Serial.println("[WIFI] Not configured. Type: SET WIFI ssid|password  then REBOOT");
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+  if (wifiSsid.length() == 0 || wifiSsid == "YOUR_WIFI") {
+    Serial.println("[WIFI] Not configured. Type: SET WIFI ssid|password");
     return;
   }
+  Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 12000) {
     updateLeds();
     delay(500); Serial.print(".");
   }
   Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
+  wifiWasConnected = WiFi.status() == WL_CONNECTED;
+  if (wifiWasConnected) {
     Serial.print("[WIFI] OK IP="); Serial.println(WiFi.localIP().toString());
   } else {
-    Serial.println("[WIFI] Offline — card UID still prints locally.");
+    Serial.println("[WIFI] Offline — it will retry automatically. Card UID still prints locally.");
+    Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
   }
+  printNetwork();
 }
 
 void setup() {
@@ -175,6 +220,8 @@ String post(const char* path, const String& body) {
   markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + path);
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-API-Key", apiKey);
   int code = http.POST(body);
@@ -291,7 +338,12 @@ void applySetting(const String& key, const String& value) {
     if (sep < 1) { Serial.println("Use: SET WIFI ssid|password"); return; }
     saveCfg("ssid", value.substring(0, sep));
     saveCfg("pass", value.substring(sep + 1));
-    Serial.println("[SET] Wi-Fi saved. Type REBOOT to connect.");
+    wifiSsid = value.substring(0, sep);
+    wifiPass = value.substring(sep + 1);
+    Serial.println("[SET] Wi-Fi saved. Reconnecting now...");
+    WiFi.disconnect(false);
+    delay(200);
+    connectWiFi();
   } else if (key == "BACKEND") { saveCfg("backend", value); backendUrl = value; }
   else if (key == "APIKEY") { saveCfg("apikey", value); apiKey = value; }
   else if (key == "STATION") { saveCfg("station", value); stationId = value; }
@@ -306,6 +358,7 @@ void handleSerial(String line) {
     Serial.println("SET WIFI ssid|pass | SET BACKEND url | SET APIKEY key | SET STATION id | SET NOZZLE id");
     Serial.println("CONFIG | JSON ON|OFF | REBOOT | REGISTER | NAME <owner> | SAVE | CANCEL");
     Serial.println("SCAN | FUND 5000 | PAY 5000 | CARD | STATUS");
+    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
     int sp = rest.indexOf(' ');
@@ -332,11 +385,15 @@ void handleSerial(String line) {
                   currentUid.length() ? currentUid.c_str() : "none", currentBalance,
                   WiFi.status() == WL_CONNECTED ? "OK" : "OFF",
                   pendingUid.length() ? pendingUid.c_str() : "none");
-  } else Serial.println("Unknown command. Type HELP.");
+  } else if (line == "NETWORK") printNetwork();
+  else if (line == "PING") pingBackend();
+  else if (line == "WIFI") { WiFi.disconnect(false); delay(200); connectWiFi(); }
+  else Serial.println("Unknown command. Type HELP.");
 }
 
 void loop() {
   updateLeds();
+  ensureWiFi();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   if (waitingForCard && millis() - registerStarted > 30000) {

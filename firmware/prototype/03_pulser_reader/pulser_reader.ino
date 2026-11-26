@@ -68,8 +68,13 @@ unsigned long wifiBlinkAt = 0;
 bool commLedOn = false;
 bool wifiLedOn = false;
 
+unsigned long lastWifiRetry = 0;
+bool wifiWasConnected = false;
+
 // Explicit prototypes. Arduino IDE sometimes misses IRAM_ATTR interrupt ISRs.
 void fetchCalibration();
+void printNetwork();
+void pingBackend();
 void IRAM_ATTR onPulse();
 
 String cfg(const char* key, const char* def) {
@@ -124,25 +129,68 @@ void loadConfig() {
   jsonEcho       = prefs.getBool("json", true);
 }
 
+void printNetwork() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  Serial.println("---- NETWORK ----");
+  Serial.printf("SSID=%s  PASS=%s\n", wifiSsid.c_str(), wifiPass.length() ? "********" : "(empty)");
+  Serial.printf("STATUS=%s  IP=%s  RSSI=%d dBm\n", up ? "CONNECTED" : "OFFLINE",
+                up ? WiFi.localIP().toString().c_str() : "-", WiFi.RSSI());
+  Serial.printf("BACKEND=%s\n", backendUrl.c_str());
+  Serial.println("-----------------");
+}
+
+void pingBackend() {
+  if (WiFi.status() != WL_CONNECTED) { Serial.println("[PING] WiFi offline — type WIFI to retry"); return; }
+  HTTPClient http;
+  http.begin(backendUrl + "/health");
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
+  markBackendActivity(1000);
+  int code = http.GET();
+  String body = http.getString();
+  http.end();
+  Serial.printf("[PING] GET /health -> %d  %s\n", code, body.c_str());
+}
+
+void ensureWiFi() {
+  bool up = WiFi.status() == WL_CONNECTED;
+  if (up != wifiWasConnected) {
+    wifiWasConnected = up;
+    Serial.println(up ? "[WIFI] Connected — type SEND to push telemetry" : "[WIFI] Link lost — reconnecting");
+  }
+  if (!up && millis() - lastWifiRetry > 10000) {
+    lastWifiRetry = millis();
+    Serial.print("[WIFI] Retry ");
+    WiFi.reconnect();
+    delay(50);
+    Serial.printf("status=%d\n", (int)WiFi.status());
+  }
+}
+
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
-  if (wifiSsid == "YOUR_WIFI" || wifiSsid.length() == 0) {
-    Serial.println("[WIFI] Not configured. Type: SET WIFI ssid|password  then REBOOT");
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+  if (wifiSsid.length() == 0 || wifiSsid == "YOUR_WIFI") {
+    Serial.println("[WIFI] Not configured. Type: SET WIFI ssid|password");
     return;
   }
+  Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 12000) {
     updateLeds();
     delay(500); Serial.print(".");
   }
   Serial.println();
-  if (WiFi.status() == WL_CONNECTED) {
+  wifiWasConnected = WiFi.status() == WL_CONNECTED;
+  if (wifiWasConnected) {
     Serial.print("[WIFI] OK IP="); Serial.println(WiFi.localIP().toString());
   } else {
-    Serial.println("[WIFI] Offline — Serial commands still work.");
+    Serial.println("[WIFI] Offline — it will retry automatically. Serial still works.");
+    Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
   }
+  printNetwork();
 }
 
 void setup() {
@@ -170,6 +218,8 @@ String requestJson(const char* method, const char* path, const String& body) {
   markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + path);
+  http.setConnectTimeout(4000);
+  http.setTimeout(6000);
   http.addHeader("Content-Type", "application/json");
   int code = strcmp(method, "GET") == 0 ? http.GET() : http.sendRequest(method, body);
   String res = http.getString();
@@ -241,7 +291,12 @@ void applySetting(const String& key, const String& value) {
     if (sep < 1) { Serial.println("Use: SET WIFI ssid|password"); return; }
     saveCfg("ssid", value.substring(0, sep));
     saveCfg("pass", value.substring(sep + 1));
-    Serial.println("[SET] Wi-Fi saved. Type REBOOT to connect.");
+    wifiSsid = value.substring(0, sep);
+    wifiPass = value.substring(sep + 1);
+    Serial.println("[SET] Wi-Fi saved. Reconnecting now...");
+    WiFi.disconnect(false);
+    delay(200);
+    connectWiFi();
   } else if (key == "BACKEND") { saveCfg("backend", value); backendUrl = value; }
   else if (key == "DEVICE") { saveCfg("dev", value); deviceUid = value; }
   else if (key == "FCC") { saveCfg("fcc", value); fccUid = value; }
@@ -258,6 +313,7 @@ void handleSerial(String line) {
     Serial.println("SET WIFI ssid|pass | SET BACKEND url | SET DEVICE uid | SET FCC uid | SET NOZZLE id");
     Serial.println("SET PPL n | SET PPS n | CONFIG | REBOOT | JSON ON|OFF");
     Serial.println("COUNT | RESET | STATUS | CAL FETCH | CAL SET n | MATH n | MATH RATE n | MATH PPS | SEND");
+    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
     int sp = rest.indexOf(' ');
@@ -276,7 +332,10 @@ void handleSerial(String line) {
                   deviceUid.c_str(), fccUid.c_str(), pulses, pulsesPerLitre,
                   (float)pulses / pulsesPerLitre, measuredPps,
                   WiFi.status() == WL_CONNECTED ? "OK" : "OFF");
-  } else if (line == "CAL FETCH") { if (WiFi.status() == WL_CONNECTED) fetchCalibration(); else Serial.println("[MATH] WiFi offline"); }
+  } else if (line == "NETWORK") printNetwork();
+  else if (line == "PING") pingBackend();
+  else if (line == "WIFI") { WiFi.disconnect(false); delay(200); connectWiFi(); }
+  else if (line == "CAL FETCH") { if (WiFi.status() == WL_CONNECTED) fetchCalibration(); else Serial.println("[MATH] WiFi offline"); }
   else if (line.startsWith("CAL SET ")) calSet(line.substring(8).toFloat());
   else if (line.startsWith("MATH RATE ")) {
     float pps = line.substring(10).toFloat();
@@ -294,6 +353,7 @@ void handleSerial(String line) {
 
 void loop() {
   updateLeds();
+  ensureWiFi();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   unsigned long now = millis();
