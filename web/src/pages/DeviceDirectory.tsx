@@ -34,6 +34,8 @@ type CardRow = {
   owner: string
   blocked: boolean
   balance_ngn: number
+  home_station?: string | null
+  nationwide?: boolean
 }
 
 const TABS = [
@@ -290,10 +292,11 @@ export default function DeviceDirectory() {
     const cardRows: Row[] = data.cards.map((card) => ({
       id: card.id,
       title: card.uid,
-      subtitle: `${card.owner} · ₦${card.balance_ngn.toLocaleString()} · Nationwide`,
+      subtitle: `${card.owner} · ₦${card.balance_ngn.toLocaleString()} · Nationwide${card.home_station ? ` · registered at ${card.home_station}` : ''}`,
       ids: idFields([
         ['Card record ID', card.id],
         ['Card UID (sketch)', card.uid],
+        ['Home station (registration only)', card.home_station || 'not set'],
       ]),
       badge: { tone: card.blocked ? 'danger' : 'success', text: card.blocked ? 'BLOCKED' : 'ACTIVE' },
     }))

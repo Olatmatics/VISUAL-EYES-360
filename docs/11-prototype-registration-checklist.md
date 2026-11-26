@@ -48,10 +48,12 @@ If this fails, the error banner shows the backend reason. The usual causes are:
 Tanks → register with station, code, capacity, product, and (for the bench)
 calibration rows. Add the tank controller UID here if you have one.
 
-## 5. POS terminal
+## 5. POS terminal (must be assigned to a nozzle)
 
-Payments → **Terminals** → register with station and, if known, the nozzle it
-belongs to. Used by the OPay `sn` mapping.
+Payments → **+ Register POS Terminal** → select station **and the nozzle the
+terminal serves**. The nozzle selector is required for the FCC sketch: without
+it, `INIT 5000` returns `400 No POS terminal assigned to this nozzle`. The
+terminal ID / serial is used by the OPay `sn` mapping.
 
 ## 6. FCC Controller — one per nozzle
 
@@ -66,6 +68,20 @@ FCC Controllers → **+ Register FCC**:
 
 The backend validates the whole hierarchy. Cross-station or cross-dispenser
 assignments are rejected with 400/403.
+
+## 6b. Pulse MATH (pulses per litre)
+
+Infrastructure → **Pulse MATH (Serial + Web)** → choose the FCC and save the
+pulses-per-litre value. Measure it with a known volume: `PPL = pulses ÷ litres`.
+The FCC board and the separate pulser ESP32 both read this same backend value.
+It can also be set from Serial with `CAL SET <ppl>` or `SET PPL <ppl>`.
+
+## 6c. RFID card enrolment (Serial Monitor)
+
+On board 5 type `REGISTER`, place the new card, optionally type `NAME <owner>`,
+then `SAVE`. Serial prints the UID, owner, home station and `NATIONWIDE: YES`.
+The home station is only where it was first registered; the card works at any
+station in any state. Use `FUND 5000` then `PAY <amount>` for a bench wallet test.
 
 ## 7. Provision the device credential
 
@@ -88,6 +104,20 @@ cd backend
 
 `check_opay_flow` proves: initiate → OPay webhook → VERIFIED → device command →
 completion. `check_dispenser_create` proves station → dispenser → nozzles.
+
+For the live bench, open **Hardware JSON Monitor** before powering the boards.
+Then type `HEARTBEAT` on board 1 and `SEND` on board 3. You should see both the
+IN request and the backend response. The device ticker treats a controller as
+online only while its heartbeat is inside the **240-second** window.
+
+Common failures:
+
+| Symptom | Cause |
+|---|---|
+| `400 No POS terminal assigned to this nozzle` | POS terminal was registered without selecting the nozzle |
+| Card enrolment fails | `SET STATION` or `SET APIKEY` on board 5 is wrong |
+| Ticker goes offline after 4 minutes | ESP32 heartbeat stopped or Wi-Fi dropped |
+| Pulse volume is wrong | Pulse MATH `PPL` was not measured from a known volume |
 
 ## Common failures
 

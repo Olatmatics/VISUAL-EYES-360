@@ -15,7 +15,7 @@
 
 const char* WIFI_SSID = "YOUR_WIFI";
 const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
-const char* BACKEND   = "http://192.168.1.100:8000";
+const char* BACKEND   = "http://172.25.0.37:8000";   // change to your PC IP if different
 const char* DEVICE_UID = "TANK-DEV-01";
 const char* TANK_ID    = "YOUR_TANK_ID";
 

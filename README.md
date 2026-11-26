@@ -58,6 +58,9 @@ visual-eyes-360/
 | `06-bom.md` | Prototype bill of materials and selection criteria |
 | `07-roadmap.md` | Phase 1–12 with exit gates |
 | `08-open-items.md` | External information required before implementation |
+| `09-hardware-api.md` | Production device-ingest contract plus the bench HTTP JSON protocol |
+| `10-prototype-hardware-guide.md` | Beginner end-to-end guide: 5 ESP32 boards, Serial commands, Pulse MATH, RFID, POS, JSON examples |
+| `11-prototype-registration-checklist.md` | Registration order and common bench failures |
 
 ## Environment note (carried over from previous session)
 

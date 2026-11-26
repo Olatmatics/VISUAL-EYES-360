@@ -422,6 +422,11 @@ class RFIDCard(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     card_uid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     customer_id: Mapped[str] = mapped_column(String(36), ForeignKey("customers.id"), index=True)
+    # Cards are nationwide. This records where the manager first registered it,
+    # it never restricts where the card can be used.
+    home_station_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("stations.id"), nullable=True, index=True
+    )
     auth_key_hash: Mapped[str] = mapped_column(String(128))
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
     daily_spend_limit: Mapped[float] = mapped_column(Float, default=100000.0)
@@ -711,6 +716,21 @@ class DeviceCommand(Base):
     status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     ack_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class HardwareExchange(Base):
+    """Bench-visible record of JSON exchanged between ESP32 boards and backend."""
+    __tablename__ = "hardware_exchanges"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    # IN = hardware -> software, OUT = software -> hardware.
+    direction: Mapped[str] = mapped_column(String(10), index=True)
+    device_uid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    endpoint: Mapped[str] = mapped_column(String(180), index=True)
+    method: Mapped[str] = mapped_column(String(10), default="POST")
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    request_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
 class SystemSetting(Base):

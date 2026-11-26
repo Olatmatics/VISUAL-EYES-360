@@ -30,6 +30,7 @@ from app.models.core import (
     Tank,
 )
 from app.modules.alerts.service import create_alert
+from app.modules.hardware.service import record_exchange
 from app.modules.payments import opay_service
 
 router = APIRouter(prefix="/api/v1", tags=["prototype"])
@@ -105,7 +106,7 @@ def initiate_transaction(payload: dict[str, Any], db: Session = Depends(get_db))
 
     payment.transaction_id = data.get("orderNo")
     db.commit()
-    return {
+    response = {
         "reference": reference,
         "order_no": data.get("orderNo"),
         "status": data.get("status", "PENDING"),
@@ -115,6 +116,12 @@ def initiate_transaction(payload: dict[str, Any], db: Session = Depends(get_db))
         "opay_pos_sn": pos_sn,
         "amount_ngn": amount,
     }
+    record_exchange(
+        direction="IN", endpoint="/api/v1/fcc/transaction/initiate",
+        device_uid=str(payload.get("device_uid") or ""),
+        request=payload, response=response,
+    )
+    return response
 
 
 @router.get("/fcc/commands/poll")
@@ -125,7 +132,7 @@ def poll_commands(device_uid: str, limit: int = 10, db: Session = Depends(get_db
             DeviceCommand.status == "PENDING",
         ).order_by(DeviceCommand.created_at).limit(limit)
     ).all()
-    return [
+    response = [
         {
             "id": c.id,
             "type": c.command_type,
@@ -134,6 +141,11 @@ def poll_commands(device_uid: str, limit: int = 10, db: Session = Depends(get_db
         }
         for c in commands
     ]
+    record_exchange(
+        direction="OUT", endpoint="/api/v1/fcc/commands/poll", method="GET",
+        device_uid=device_uid, request={"limit": limit}, response=response,
+    )
+    return response
 
 
 @router.post("/fcc/commands/ack")
@@ -144,7 +156,12 @@ def ack_command(payload: dict[str, Any], db: Session = Depends(get_db)):
     command.status = "ACKED"
     command.ack_at = _utc()
     db.commit()
-    return {"id": command.id, "status": "ACKED"}
+    response = {"id": command.id, "status": "ACKED"}
+    record_exchange(
+        direction="IN", endpoint="/api/v1/fcc/commands/ack",
+        device_uid=command.device_uid, request=payload, response=response,
+    )
+    return response
 
 
 @router.post("/fcc/transaction/complete")
@@ -199,12 +216,18 @@ def complete_transaction(payload: dict[str, Any], db: Session = Depends(get_db))
             discrepancy=difference,
         )
     db.commit()
-    return {
+    response = {
         "transaction_ref": reference,
         "dispensed_liters": dispensed,
         "difference_l": difference,
         "discrepancy": tx.discrepancy_alert,
     }
+    record_exchange(
+        direction="IN", endpoint="/api/v1/fcc/transaction/complete",
+        device_uid=str(payload.get("device_uid") or ""),
+        request=payload, response=response,
+    )
+    return response
 
 
 @router.post("/device/prototype/telemetry")
@@ -239,7 +262,90 @@ def prototype_telemetry(payload: dict[str, Any], db: Session = Depends(get_db)):
         if tank and isinstance((payload.get("readings") or {}).get("fuel_volume_l"), (int, float)):
             tank.current_volume_l = float(payload["readings"]["fuel_volume_l"])
         db.commit()
-    return {"accepted": True, "duplicate": existing is not None, "device_uid": uid}
+    response = {"accepted": True, "duplicate": existing is not None, "device_uid": uid}
+    record_exchange(
+        direction="IN", endpoint="/api/v1/device/prototype/telemetry",
+        device_uid=uid, request=payload, response=response,
+    )
+    return response
+
+
+@router.post("/fcc/prototype/heartbeat")
+def prototype_fcc_heartbeat(payload: dict[str, Any], db: Session = Depends(get_db)):
+    """Bench heartbeat for the ticker. Production uses /device-ingest with a key."""
+    uid = str(payload.get("device_uid") or "").strip()
+    if not uid:
+        raise HTTPException(400, "device_uid is required")
+    device = db.scalar(select(FCCDevice).where(FCCDevice.device_uid == uid))
+    if device is None:
+        raise HTTPException(404, "FCC controller not found")
+
+    now = _utc()
+    device.last_heartbeat = now
+    device.last_communication_at = now
+    if device.status == "ACTIVE":
+        device.is_online = True
+    if payload.get("firmware_version"):
+        device.firmware_version = str(payload["firmware_version"])[:40]
+    try:
+        rssi = int(payload.get("signal_strength_dbm"))
+        if -150 <= rssi <= 0:
+            device.signal_strength_dbm = rssi
+    except (TypeError, ValueError):
+        pass
+    db.commit()
+    response = {
+        "accepted": True, "device_uid": uid, "is_online": bool(device.is_online),
+        "last_seen": now.isoformat(),
+    }
+    record_exchange(
+        direction="IN", endpoint="/api/v1/fcc/prototype/heartbeat",
+        device_uid=uid, request=payload, response=response,
+    )
+    return response
+
+
+@router.get("/fcc/calibration")
+def get_fcc_calibration(device_uid: str, db: Session = Depends(get_db)):
+    """Let a separate pulser ESP32 fetch pulses-per-litre set in the web MATH screen."""
+    device = db.scalar(select(FCCDevice).where(FCCDevice.device_uid == device_uid))
+    if device is None:
+        raise HTTPException(404, "FCC controller not found")
+    return {
+        "device_uid": device.device_uid,
+        "pulses_per_litre": float(device.calibration_factor or 0),
+        "station_id": device.station_id,
+        "nozzle_id": device.nozzle_id,
+        "dispenser_id": device.dispenser_id,
+    }
+
+
+@router.patch("/fcc/calibration")
+def set_fcc_calibration(payload: dict[str, Any], db: Session = Depends(get_db)):
+    """Set pulses-per-litre from the Serial Monitor or the web MATH screen."""
+    uid = str(payload.get("device_uid") or "").strip()
+    if not uid:
+        raise HTTPException(400, "device_uid is required")
+    try:
+        ppl = float(payload.get("pulses_per_litre"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "pulses_per_litre must be a number")
+    if ppl <= 0:
+        raise HTTPException(400, "pulses_per_litre must be greater than zero")
+    device = db.scalar(select(FCCDevice).where(FCCDevice.device_uid == uid))
+    if device is None:
+        raise HTTPException(404, "FCC controller not found")
+    device.calibration_factor = ppl
+    db.commit()
+    response = {
+        "device_uid": uid, "pulses_per_litre": ppl,
+        "formula": "litres = raw_pulse_count / pulses_per_litre",
+    }
+    record_exchange(
+        direction="IN", endpoint="/api/v1/fcc/calibration", method="PATCH",
+        device_uid=uid, request=payload, response=response,
+    )
+    return response
 
 
 def uuid_hex() -> str:

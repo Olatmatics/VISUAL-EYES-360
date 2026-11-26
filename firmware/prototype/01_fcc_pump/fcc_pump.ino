@@ -1,72 +1,142 @@
 /*
- * VISUAL EYES 360 - PROTOTYPE BOARD 1: FCC PUMP CONTROLLER (double nozzle)
- * Target: ESP32 DevKit v1. Serial 115200. Optional ST7735 TFT on the only screen.
+ * VISUAL EYES 360 - BOARD 1: FCC PUMP CONTROLLER (two nozzles)
+ * Bench prototype. ESP32 DevKit v1, Serial 115200. NOT intrinsically safe.
  *
- * Serial commands (type in Serial Monitor):
- *   HELP                 list commands
- *   NOZZLE A|B           select active nozzle
- *   INIT 5000            start a payment for NGN amount (or "INIT 5L")
- *   POLL                 fetch queued backend commands
- *   ACK <id>             acknowledge a command
- *   COMPLETE 4.35        finish dispensing with measured litres
- *   STATUS               show current state
+ * Everything can be typed in Serial Monitor — no code editing needed at the bench.
  *
- * Backend endpoints used (JSON over HTTP):
- *   POST /api/v1/fcc/transaction/initiate
- *   GET  /api/v1/fcc/commands/poll?device_uid=...
- *   POST /api/v1/fcc/commands/ack
- *   POST /api/v1/fcc/transaction/complete
+ * SETUP COMMANDS (saved in ESP32 Preferences, survive power cycle):
+ *   SET WIFI ssid|password       Wi-Fi credentials
+ *   SET BACKEND http://172.25.0.37:8000
+ *   SET STATION <station id>
+ *   SET NOZZLE_A <nozzle id>     SET NOZZLE_B <nozzle id>
+ *   SET DEVICE_A <fcc uid>       SET DEVICE_B <fcc uid>
+ *   SET POS <opay pos serial>
+ *   SET DISPENSER <dispenser id>
+ *   SET PRICE <ngn per litre>
+ *   CONFIG                       show all saved values
+ *   REBOOT                       restart to apply Wi-Fi change
+ *
+ * TEST COMMANDS:
+ *   HELP | NOZZLE A|B | INIT 5000 (or INIT 5L) | POLL | ACK <id>
+ *   COMPLETE <litres> | STATUS | RESET | HEARTBEAT | JSON ON|OFF
+ *   CAL FETCH | CAL SET <pulses per litre>
+ *
+ * The automatic heartbeat makes the web ticker show this controller online.
+ * All request and response JSON is printed to Serial when JSON is ON.
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
+#include <string.h>
 
-// ---- CONFIGURE FOR YOUR BENCH -------------------------------------------
-const char* WIFI_SSID = "YOUR_WIFI";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
-const char* BACKEND   = "http://192.168.1.100:8000";   // PC running uvicorn
-const char* STATION_ID = "YOUR_STATION_ID";
-const char* NOZZLE_A_ID = "YOUR_NOZZLE_A_ID";
-const char* NOZZLE_B_ID = "YOUR_NOZZLE_B_ID";
-const char* POS_SN      = "YOUR_OPAY_POS_SN";
-const char* DEVICE_UID_A = "FCC-DEV-A";
-const char* DEVICE_UID_B = "FCC-DEV-B";
-float UNIT_PRICE = 1150.0;      // NGN per litre, overridden by backend response
-const int PULSES_PER_LITRE = 1; // bench default - set from real pulser spec
+Preferences prefs;
 
-// ---- PINS ---------------------------------------------------------------
+// ---- Factory defaults. Change these from Serial with SET ... ---------------
+const char* DEF_WIFI_SSID   = "YOUR_WIFI";
+const char* DEF_WIFI_PASS   = "YOUR_WIFI_PASSWORD";
+const char* DEF_BACKEND     = "http://172.25.0.37:8000";
+const char* DEF_STATION     = "YOUR_STATION_ID";
+const char* DEF_NOZZLE_A    = "YOUR_NOZZLE_A_ID";
+const char* DEF_NOZZLE_B    = "YOUR_NOZZLE_B_ID";
+const char* DEF_DEVICE_A    = "fcc-matics-001";
+const char* DEF_DEVICE_B    = "FCC-DEV-B";
+const char* DEF_POS         = "YOUR_OPAY_POS_SN";
+const char* DEF_DISPENSER   = "YOUR_DISPENSER_ID";
+const char* FIRMWARE        = "ve360-fcc-bench-1.1";
+
 #define RELAY_A   26
 #define RELAY_B   25
 #define LED_PIN   2
 #define PULSE_A   27
 #define PULSE_B   14
 
-// ---- STATE --------------------------------------------------------------
 enum State { IDLE, PAYMENT_PENDING, AUTHORIZED, DISPENSING, COMPLETE, ERROR_STATE };
 State state = IDLE;
+
+String wifiSsid, wifiPass, backendUrl, stationId, nozzleAId, nozzleBId;
+String posSn, deviceUidA, deviceUidB, dispenserId;
 String activeTx = "";
 String activeNozzle = "A";
-float authorizedLitres = 0;
+volatile char activeNozzleChar = 'A';
 volatile unsigned long pulses = 0;
+float unitPrice = 1150.0;
+float pulsesPerLitre = 1.0;
+float authorizedLitres = 0;
+bool jsonEcho = true;
+
 unsigned long lastPoll = 0;
+unsigned long lastHeartbeat = 0;
+unsigned long lastCalFetch = 0;
 unsigned long dispenseStart = 0;
+
+String cfg(const char* key, const char* def) {
+  String value = prefs.getString(key, "");
+  return value.length() ? value : String(def);
+}
+void saveCfg(const char* key, const String& value) { prefs.putString(key, value); }
+
+String currentDeviceUid() { return activeNozzleChar == 'A' ? deviceUidA : deviceUidB; }
+String currentNozzleId()  { return activeNozzleChar == 'A' ? nozzleAId : nozzleBId; }
+
+void loadConfig() {
+  prefs.begin("ve360-fcc", false);
+  wifiSsid     = cfg("ssid", DEF_WIFI_SSID);
+  wifiPass     = cfg("pass", DEF_WIFI_PASS);
+  backendUrl   = cfg("backend", DEF_BACKEND);
+  stationId    = cfg("station", DEF_STATION);
+  nozzleAId    = cfg("nozA", DEF_NOZZLE_A);
+  nozzleBId    = cfg("nozB", DEF_NOZZLE_B);
+  deviceUidA   = cfg("devA", DEF_DEVICE_A);
+  deviceUidB   = cfg("devB", DEF_DEVICE_B);
+  posSn        = cfg("pos", DEF_POS);
+  dispenserId  = cfg("disp", DEF_DISPENSER);
+  unitPrice    = prefs.getFloat("price", unitPrice);
+  pulsesPerLitre = prefs.getFloat("ppl", pulsesPerLitre);
+  jsonEcho     = prefs.getBool("json", true);
+}
+
+void connectWiFi() {
+  WiFi.mode(WIFI_STA);
+  if (wifiSsid == "YOUR_WIFI" || wifiSsid.length() == 0) {
+    Serial.println("[WIFI] Not configured. Type: SET WIFI your-ssid|your-password  then REBOOT");
+    return;
+  }
+  WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+  Serial.print("[WIFI] Connecting");
+  unsigned long started = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("[WIFI] OK IP=");
+    Serial.println(WiFi.localIP().toString());
+  } else {
+    Serial.println("[WIFI] Offline — Serial commands still work.");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
   pinMode(RELAY_A, OUTPUT); pinMode(RELAY_B, OUTPUT);
   pinMode(LED_PIN, OUTPUT); pinMode(PULSE_A, INPUT_PULLUP); pinMode(PULSE_B, INPUT_PULLUP);
   closeValves();
-  WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("Connecting WiFi");
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  Serial.println("\nREADY. Type HELP for commands.");
+  loadConfig();
   attachInterrupt(digitalPinToInterrupt(PULSE_A), onPulseA, FALLING);
   attachInterrupt(digitalPinToInterrupt(PULSE_B), onPulseB, FALLING);
+  connectWiFi();
+  Serial.println("READY. Type HELP for commands, CONFIG to see saved IDs.");
+  if (WiFi.status() == WL_CONNECTED) {
+    sendHeartbeat();
+    fetchCalibration();
+  }
 }
 
-void IRAM_ATTR onPulseA() { if (activeNozzle == "A") pulses++; }
-void IRAM_ATTR onPulseB() { if (activeNozzle == "B") pulses++; }
+void IRAM_ATTR onPulseA() { if (activeNozzleChar == 'A') pulses++; }
+void IRAM_ATTR onPulseB() { if (activeNozzleChar == 'B') pulses++; }
 
 void closeValves() {
   digitalWrite(RELAY_A, HIGH); digitalWrite(RELAY_B, HIGH); // active-low relay modules
@@ -80,112 +150,236 @@ void openValve(char n) {
   Serial.printf("[VALVE] OPEN nozzle %c\n", n);
 }
 
-String postJson(const char* path, String body) {
+void echoJson(const char* tag, const String& body) {
+  if (jsonEcho) Serial.printf("[JSON %s] %s\n", tag, body.c_str());
+}
+
+String requestJson(const char* method, const char* path, const String& body) {
   if (WiFi.status() != WL_CONNECTED) return "{\"error\":\"wifi_offline\"}";
-  HTTPClient http; http.begin(String(BACKEND) + path);
+  HTTPClient http;
+  http.begin(backendUrl + path);
   http.addHeader("Content-Type", "application/json");
-  int code = http.POST(body);
-  String res = http.getString(); http.end();
-  Serial.printf("[HTTP] POST %s -> %d\n", path, code);
+  int code;
+  if (strcmp(method, "GET") == 0)       code = http.GET();
+  else if (strcmp(method, "PATCH") == 0) code = http.sendRequest("PATCH", body);
+  else                                   code = http.POST(body);
+  String res = http.getString();
+  http.end();
+  echoJson("OUT", body.length() ? body : String("GET ") + path);
+  Serial.printf("[HTTP] %s %s -> %d\n", method, path, code);
+  echoJson("IN", res);
   return res;
 }
-String getJson(String path) {
-  if (WiFi.status() != WL_CONNECTED) return "[]";
-  HTTPClient http; http.begin(String(BACKEND) + path);
-  int code = http.GET(); String res = http.getString(); http.end();
-  Serial.printf("[HTTP] GET %s -> %d\n", path.c_str(), code);
-  return res;
+
+String postJson(const char* path, const String& body) { return requestJson("POST", path, body); }
+String getJson(const String& path) { return requestJson("GET", path.c_str(), ""); }
+
+void sendHeartbeat() {
+  StaticJsonDocument<256> doc;
+  doc["device_uid"] = currentDeviceUid();
+  doc["firmware_version"] = FIRMWARE;
+  doc["signal_strength_dbm"] = WiFi.RSSI();
+  String body; serializeJson(doc, body);
+  Serial.println("[HEARTBEAT] " + postJson("/api/v1/fcc/prototype/heartbeat", body));
+}
+
+void fetchCalibration() {
+  String res = getJson("/api/v1/fcc/calibration?device_uid=" + currentDeviceUid());
+  DynamicJsonDocument parsed(1024);
+  if (!deserializeJson(parsed, res)) {
+    float ppl = parsed["pulses_per_litre"] | 0;
+    if (ppl > 0) {
+      pulsesPerLitre = ppl;
+      Serial.printf("[CAL] pulses/litre = %.3f (from web MATH setting)\n", pulsesPerLitre);
+    }
+  }
+}
+
+void calSet(float ppl) {
+  if (ppl <= 0) { Serial.println("ERR: pulses per litre must be greater than zero"); return; }
+  StaticJsonDocument<256> doc;
+  doc["device_uid"] = currentDeviceUid();
+  doc["pulses_per_litre"] = ppl;
+  String body; serializeJson(doc, body);
+  Serial.println("[CAL] " + requestJson("PATCH", "/api/v1/fcc/calibration", body));
+  pulsesPerLitre = ppl;
+  prefs.putFloat("ppl", ppl);
 }
 
 void initPayment(float amount) {
   if (amount <= 0) { Serial.println("ERR: amount must be positive"); return; }
   activeTx = "FCCTX" + String(millis());
-  String nozzleId = activeNozzle == "A" ? NOZZLE_A_ID : NOZZLE_B_ID;
-  String deviceUid = activeNozzle == "A" ? DEVICE_UID_A : DEVICE_UID_B;
   StaticJsonDocument<512> doc;
   doc["client_tx_ref"] = activeTx;
-  doc["nozzle_id"] = nozzleId;
+  doc["nozzle_id"] = currentNozzleId();
   doc["target_amount_ngn"] = amount;
   doc["payment_preference"] = "POS";
-  doc["pos_sn"] = POS_SN;
-  doc["device_uid"] = deviceUid;
+  doc["pos_sn"] = posSn;
+  doc["device_uid"] = currentDeviceUid();
   String body; serializeJson(doc, body);
   String res = postJson("/api/v1/fcc/transaction/initiate", body);
-  Serial.println("[INIT] " + res);
-  StaticJsonDocument<1024> parsed;
+  DynamicJsonDocument parsed(2048);
   if (!deserializeJson(parsed, res)) {
     authorizedLitres = parsed["authorized_liters"] | 0;
-    UNIT_PRICE = parsed["unit_price_ngn"] | UNIT_PRICE;
+    unitPrice = parsed["unit_price_ngn"] | unitPrice;
     state = PAYMENT_PENDING;
-    Serial.printf("[INIT] Pending %.2f L at NGN %.2f/L\n", authorizedLitres, UNIT_PRICE);
-  } else state = ERROR_STATE;
+    Serial.printf("[INIT] Pending %.2f L at NGN %.2f/L. POS SN=%s\n",
+                  authorizedLitres, unitPrice, parsed["opay_pos_sn"] | "");
+  } else {
+    state = ERROR_STATE;
+    Serial.println("[INIT] Failed. See JSON above (POS terminal may not be assigned).");
+  }
 }
 
 void pollCommands() {
-  String uid = activeNozzle == "A" ? DEVICE_UID_A : DEVICE_UID_B;
-  String res = getJson("/api/v1/fcc/commands/poll?device_uid=" + uid + "&limit=10");
-  Serial.println("[POLL] " + res);
-  // Minimal command extraction (avoids full array parsing on ESP32)
+  String res = getJson("/api/v1/fcc/commands/poll?device_uid=" + currentDeviceUid() + "&limit=10");
   int typePos = res.indexOf("\"type\":\"PAYMENT_SUCCESS\"");
   int idPos = res.indexOf("\"id\":\"");
   String cmdId = "";
   if (idPos >= 0) {
-    int start = idPos + 6; int end = res.indexOf('"', start);
-    cmdId = res.substring(start, end);
+    int start = idPos + 6;
+    int end = res.indexOf('"', start);
+    if (end > start) cmdId = res.substring(start, end);
   }
   if (typePos >= 0) {
     state = AUTHORIZED;
-    openValve(activeNozzle.charAt(0));
-    pulses = 0; dispenseStart = millis(); state = DISPENSING;
-    Serial.println("[PAYMENT] APPROVED - dispensing");
-    if (cmdId.length()) postJson("/api/v1/fcc/commands/ack", "{\"command_id\":\"" + cmdId + "\"}");
+    openValve(activeNozzleChar);
+    pulses = 0;
+    dispenseStart = millis();
+    state = DISPENSING;
+    Serial.println("[PAYMENT] APPROVED - valve open, dispensing");
+    if (cmdId.length() > 0) {
+      StaticJsonDocument<128> ack;
+      ack["command_id"] = cmdId;
+      String ackBody; serializeJson(ack, ackBody);
+      postJson("/api/v1/fcc/commands/ack", ackBody);
+    }
   } else if (res.indexOf("PAYMENT_FAILED") >= 0) {
-    state = ERROR_STATE; closeValves();
-    if (cmdId.length()) postJson("/api/v1/fcc/commands/ack", "{\"command_id\":\"" + cmdId + "\"}");
+    state = ERROR_STATE;
+    closeValves();
+    Serial.println("[PAYMENT] DECLINED - valve stays closed");
+    if (cmdId.length() > 0) {
+      StaticJsonDocument<128> ack;
+      ack["command_id"] = cmdId;
+      String ackBody; serializeJson(ack, ackBody);
+      postJson("/api/v1/fcc/commands/ack", ackBody);
+    }
   }
 }
 
 void complete(float litres) {
+  if (litres <= 0) litres = (float)pulses / pulsesPerLitre;
   StaticJsonDocument<512> doc;
   doc["client_tx_ref"] = activeTx;
-  doc["dispenser_id"] = "DISPENSER_ID";
+  doc["device_uid"] = currentDeviceUid();
+  doc["dispenser_id"] = dispenserId;
   doc["dispensed_liters"] = litres;
   doc["cpu_volume_l"] = litres;
-  doc["pulser_volume_l"] = (float)pulses / PULSES_PER_LITRE;
+  doc["pulser_volume_l"] = (float)pulses / pulsesPerLitre;
   doc["raw_pulse_count"] = pulses;
-  doc["unit_price_ngn"] = UNIT_PRICE;
-  doc["total_charged_ngn"] = litres * UNIT_PRICE;
+  doc["pulses_per_litre"] = pulsesPerLitre;
+  doc["unit_price_ngn"] = unitPrice;
+  doc["total_charged_ngn"] = litres * unitPrice;
   String body; serializeJson(doc, body);
   Serial.println("[COMPLETE] " + postJson("/api/v1/fcc/transaction/complete", body));
-  closeValves(); state = COMPLETE;
+  closeValves();
+  state = COMPLETE;
 }
 
-void loop() {
-  if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
-  if (state == DISPENSING && pulses >= (unsigned long)(authorizedLitres * PULSES_PER_LITRE)) {
-    complete((float)pulses / PULSES_PER_LITRE);
-  }
-  if (millis() - lastPoll > 2000) { lastPoll = millis(); if (state == PAYMENT_PENDING) pollCommands(); }
-  delay(10);
+void printConfig() {
+  Serial.println("---- SAVED CONFIG ----");
+  Serial.printf("WIFI=%s BACKEND=%s\n", wifiSsid.c_str(), backendUrl.c_str());
+  Serial.printf("STATION=%s DISPENSER=%s\n", stationId.c_str(), dispenserId.c_str());
+  Serial.printf("NOZZLE_A=%s\nNOZZLE_B=%s\n", nozzleAId.c_str(), nozzleBId.c_str());
+  Serial.printf("DEVICE_A=%s\nDEVICE_B=%s\n", deviceUidA.c_str(), deviceUidB.c_str());
+  Serial.printf("POS=%s PRICE=%.2f PPL=%.3f JSON=%s\n",
+                posSn.c_str(), unitPrice, pulsesPerLitre, jsonEcho ? "ON" : "OFF");
+  Serial.println("----------------------");
+}
+
+void applySetting(const String& key, const String& value) {
+  if (key == "WIFI") {
+    int sep = value.indexOf('|');
+    if (sep < 1) { Serial.println("Use: SET WIFI ssid|password"); return; }
+    saveCfg("ssid", value.substring(0, sep));
+    saveCfg("pass", value.substring(sep + 1));
+    Serial.println("[SET] Wi-Fi saved. Type REBOOT to connect.");
+  } else if (key == "BACKEND") { saveCfg("backend", value); backendUrl = value; }
+  else if (key == "STATION") { saveCfg("station", value); stationId = value; }
+  else if (key == "NOZZLE_A") { saveCfg("nozA", value); nozzleAId = value; }
+  else if (key == "NOZZLE_B") { saveCfg("nozB", value); nozzleBId = value; }
+  else if (key == "DEVICE_A") { saveCfg("devA", value); deviceUidA = value; }
+  else if (key == "DEVICE_B") { saveCfg("devB", value); deviceUidB = value; }
+  else if (key == "POS") { saveCfg("pos", value); posSn = value; }
+  else if (key == "DISPENSER") { saveCfg("disp", value); dispenserId = value; }
+  else if (key == "PRICE") { unitPrice = value.toFloat(); prefs.putFloat("price", unitPrice); }
+  else if (key == "PPL") { pulsesPerLitre = value.toFloat(); prefs.putFloat("ppl", pulsesPerLitre); }
+  else { Serial.println("Unknown SET key. Type CONFIG to see keys."); return; }
+  Serial.println("[SET] " + key + " saved.");
 }
 
 void handleSerial(String line) {
   line.trim();
   if (line == "HELP") {
-    Serial.println("NOZZLE A|B | INIT <amount|NL> | POLL | ACK <id> | COMPLETE <L> | STATUS");
-  } else if (line.startsWith("NOZZLE ")) {
-    activeNozzle = line.substring(7); activeNozzle.trim();
+    Serial.println("SET WIFI ssid|pass | SET BACKEND url | SET STATION id | SET NOZZLE_A id | SET NOZZLE_B id");
+    Serial.println("SET DEVICE_A uid | SET DEVICE_B uid | SET POS sn | SET DISPENSER id | SET PRICE n | SET PPL n");
+    Serial.println("CONFIG | REBOOT | NOZZLE A|B | INIT 5000 | INIT 5L | POLL | ACK id | COMPLETE L");
+    Serial.println("STATUS | RESET | HEARTBEAT | JSON ON|OFF | CAL FETCH | CAL SET n");
+  } else if (line.startsWith("SET ")) {
+    String rest = line.substring(4);
+    int sp = rest.indexOf(' ');
+    if (sp < 0) { Serial.println("Use: SET KEY value"); return; }
+    applySetting(rest.substring(0, sp), rest.substring(sp + 1));
+  } else if (line == "CONFIG") printConfig();
+  else if (line == "REBOOT") ESP.restart();
+  else if (line.startsWith("NOZZLE ")) {
+    String n = line.substring(7); n.trim();
+    activeNozzle = n;
+    activeNozzleChar = (n.length() && (n.charAt(0) == 'B' || n.charAt(0) == 'b')) ? 'B' : 'A';
     Serial.println("[NOZZLE] " + activeNozzle);
   } else if (line.startsWith("INIT ")) {
     String v = line.substring(5); v.trim();
-    float amount = v.endsWith("L") ? v.substring(0, v.length()-1).toFloat() * UNIT_PRICE : v.toFloat();
+    float amount = v.endsWith("L") || v.endsWith("l")
+      ? v.substring(0, v.length() - 1).toFloat() * unitPrice
+      : v.toFloat();
     initPayment(amount);
   } else if (line == "POLL") pollCommands();
   else if (line.startsWith("ACK ")) {
-    Serial.println(postJson("/api/v1/fcc/commands/ack", "{\"command_id\":\"" + line.substring(4) + "\"}"));
-  } else if (line.startsWith("COMPLETE ")) complete(line.substring(9).toFloat());
-  else if (line == "STATUS") {
-    Serial.printf("STATE=%d NOZZLE=%s TX=%s PULSES=%lu LITRES=%.2f\n",
-                  state, activeNozzle.c_str(), activeTx.c_str(), pulses, (float)pulses / PULSES_PER_LITRE);
+    StaticJsonDocument<128> ack;
+    ack["command_id"] = line.substring(4);
+    String body; serializeJson(ack, body);
+    Serial.println(postJson("/api/v1/fcc/commands/ack", body));
+  } else if (line.startsWith("COMPLETE")) {
+    String v = line.substring(8); v.trim();
+    complete(v.length() ? v.toFloat() : 0);
+  } else if (line == "STATUS") {
+    Serial.printf("STATE=%d NOZZLE=%s TX=%s PULSES=%lu LITRES=%.3f PPL=%.3f AUTHORIZED=%.2f\n",
+                  state, activeNozzle.c_str(), activeTx.c_str(), pulses,
+                  (float)pulses / pulsesPerLitre, pulsesPerLitre, authorizedLitres);
+    Serial.printf("UID=%s WIFI=%s RSSI=%d\n", currentDeviceUid().c_str(),
+                  WiFi.status() == WL_CONNECTED ? "OK" : "OFF", WiFi.RSSI());
+  } else if (line == "RESET") { pulses = 0; activeTx = ""; state = IDLE; closeValves(); Serial.println("[RESET] pulses and transaction cleared"); }
+  else if (line == "HEARTBEAT") { if (WiFi.status() == WL_CONNECTED) sendHeartbeat(); else Serial.println("[HEARTBEAT] WiFi offline"); }
+  else if (line.startsWith("JSON ")) {
+    jsonEcho = line.substring(5) == "ON";
+    prefs.putBool("json", jsonEcho);
+    Serial.printf("[JSON] %s\n", jsonEcho ? "ON" : "OFF");
+  } else if (line == "CAL FETCH") { if (WiFi.status() == WL_CONNECTED) fetchCalibration(); else Serial.println("[CAL] WiFi offline"); }
+  else if (line.startsWith("CAL SET ")) calSet(line.substring(8).toFloat());
+  else Serial.println("Unknown command. Type HELP.");
+}
+
+void loop() {
+  if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (millis() - lastHeartbeat > 30000) { lastHeartbeat = millis(); sendHeartbeat(); }
+    if (millis() - lastCalFetch > 300000) { lastCalFetch = millis(); fetchCalibration(); }
+    if (state == PAYMENT_PENDING && millis() - lastPoll > 2000) { lastPoll = millis(); pollCommands(); }
   }
+
+  if (state == DISPENSING && pulses >= (unsigned long)(authorizedLitres * pulsesPerLitre)) {
+    complete((float)pulses / pulsesPerLitre);
+  }
+  delay(10);
 }

@@ -33,6 +33,8 @@ def check_offline_devices() -> dict:
             )
         ).all()
         for device in fcc_devices:
+            # Ticker truth: a device with no recent heartbeat is not online.
+            device.is_online = False
             create_alert(
                 db,
                 alert_type="FCC_OFFLINE",
@@ -59,6 +61,7 @@ def check_offline_devices() -> dict:
             )
         ).all()
         for device in tank_devices:
+            device.is_online = False
             tank = device.tank
             create_alert(
                 db,

@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { Badge, Button, Card, ErrorBanner, Input, Modal, PageHeader } from '../components/ui'
-import type { PaymentRecordItem, POSTerminalItem, Station } from '../types'
+import type { NozzleItem, PaymentRecordItem, POSTerminalItem, Station } from '../types'
 
 export default function Payments() {
   const { can } = useAuth()
   const [terminals, setTerminals] = useState<POSTerminalItem[]>([])
   const [payments, setPayments] = useState<PaymentRecordItem[]>([])
   const [stations, setStations] = useState<Station[]>([])
+  const [nozzles, setNozzles] = useState<NozzleItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [registering, setRegistering] = useState(false)
@@ -18,6 +19,7 @@ export default function Payments() {
     serial_number: '',
     provider: 'OPAY',
     station_id: '',
+    nozzle_id: '',
   })
   const [simForm, setSimForm] = useState({
     amount: '10000',
@@ -31,11 +33,13 @@ export default function Payments() {
       api.get<POSTerminalItem[]>('/payments/terminals'),
       api.get<PaymentRecordItem[]>('/payments/records'),
       api.get<Station[]>('/stations'),
+      api.get<NozzleItem[]>('/nozzles'),
     ])
-      .then(([t, p, s]) => {
+      .then(([t, p, s, n]) => {
         setTerminals(t)
         setPayments(p)
         setStations(s)
+        setNozzles(n)
         if (s.length > 0 && !termForm.station_id) {
           setTermForm((prev) => ({ ...prev, station_id: s[0].id }))
         }
@@ -165,6 +169,19 @@ export default function Payments() {
                 {stations.map((s) => (
                   <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                 ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Assign to Nozzle (required for FCC INIT 5000)</span>
+              <select value={termForm.nozzle_id} onChange={(e) => setTermForm({ ...termForm, nozzle_id: e.target.value })}>
+                <option value="">Unassigned — do this before bench testing</option>
+                {nozzles
+                  .filter((n) => !termForm.station_id || n.station_id === termForm.station_id)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.dispenser_code} · Nozzle {n.number} · ₦{n.price}/L
+                    </option>
+                  ))}
               </select>
             </label>
             <Input

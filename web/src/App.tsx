@@ -16,9 +16,11 @@ import FCCDevices from './pages/FCCDevices'
 import FleetManagement from './pages/FleetManagement'
 import Forecourt from './pages/Forecourt'
 import ForgotPassword from './pages/ForgotPassword'
+import HardwareJson from './pages/HardwareJson'
 import Login from './pages/Login'
 import Payments from './pages/Payments'
 import PriceManagement from './pages/PriceManagement'
+import PulseMath from './pages/PulseMath'
 import PulserReconciliation from './pages/PulserReconciliation'
 import QuickSetup from './pages/QuickSetup'
 import LocationBrowser from './pages/LocationBrowser'
@@ -102,6 +104,8 @@ export default function App() {
             <Route path="stations" element={<Protected module="stations"><Stations /></Protected>} />
             <Route path="dispensers" element={<Protected module="dispensers"><Dispensers /></Protected>} />
             <Route path="fcc-devices" element={<Protected module="fcc_devices"><FCCDevices /></Protected>} />
+            <Route path="pulse-math" element={<Protected module="fcc_devices"><PulseMath /></Protected>} />
+            <Route path="hardware-json" element={<Protected module="hardware"><HardwareJson /></Protected>} />
             <Route path="tanks" element={<Protected module="tanks"><Tanks /></Protected>} />
             <Route path="pulser-reconciliation" element={<Protected module="pulser"><PulserReconciliation /></Protected>} />
             <Route path="tank-reconciliation" element={<Protected module="tank_reconciliation"><TankReconciliation /></Protected>} />

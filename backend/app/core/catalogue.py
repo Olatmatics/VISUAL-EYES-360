@@ -29,6 +29,7 @@ MODULES = [
     ("reports", "Reports", ["view", "export"]),
     ("user_activity", "User Activity", ["view", "export"]),
     ("device_config", "Device Configuration", ["view", "create", "edit", "manage", "approve"]),
+    ("hardware", "Hardware JSON Monitor", ["view"]),
     ("ingestion", "Hardware Ingestion", ["view", "manage"]),
     ("notifications", "Notification Queue", ["view", "manage"]),
     ("system_settings", "System Settings", ["view", "edit", "manage"]),
@@ -108,7 +109,7 @@ _VIEW_MODULES = [
     "deliveries", "maintenance", "transactions", "pulser",
     "dispenser_reconciliation", "tank_reconciliation", "prices", "alerts",
     "reports", "payments", "customers", "wallet", "rfid", "fleet", "vehicles",
-    "pos",
+    "pos", "hardware",
 ]
 
 _STATION_MODULES = [
@@ -116,7 +117,7 @@ _STATION_MODULES = [
     "fcc_devices", "tanks", "tank_controllers", "tank_pump_assignment",
     "deliveries", "maintenance", "transactions", "pulser",
     "dispenser_reconciliation", "tank_reconciliation", "prices", "alerts",
-    "reports", "payments", "customers", "wallet", "rfid",
+    "reports", "payments", "customers", "wallet", "rfid", "hardware",
 ]
 
 

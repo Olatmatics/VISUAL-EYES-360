@@ -65,7 +65,7 @@ On a development machine from `backend/`:
 | API key for device ingest | `INGEST_API_KEY` in `.env.production`; rotate via `/device-ingest/provision/...` |
 | New schema change | New Alembic revision under `backend/migrations/versions/`; run `$S run --rm migrate` |
 | Telemetry retention | `TELEMETRY_RETENTION_MONTHS` in `.env.production` (default 12) |
-| Offline alert threshold | `DEVICE_OFFLINE_AFTER_MINUTES` (default 15) |
+| Offline alert threshold | `DEVICE_OFFLINE_AFTER_MINUTES` (default 4 = 240 s ticker window) |
 | New MQTT device | `deployment/mosquitto/provision_device.py`, then restart `mqtt` |
 
 ## Backups

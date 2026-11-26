@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     MQTT_TLS: bool = False
     MQTT_TOPIC_PREFIX: str = "ve360"
     TELEMETRY_RETENTION_MONTHS: int = 12
-    DEVICE_OFFLINE_AFTER_MINUTES: int = 15
+    DEVICE_OFFLINE_AFTER_MINUTES: int = 4   # 240 s bench ticker/window
 
     # ---- OPay POS gateway (prototype integration) ------------------------
     # Secrets are supplied through the environment / .env, never in code.

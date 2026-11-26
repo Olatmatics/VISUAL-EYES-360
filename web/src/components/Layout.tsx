@@ -18,6 +18,8 @@ const NAV: NavItem[] = [
   { to: '/stations', label: 'Stations Network', module: 'stations', action: 'view', icon: '◈' },
   { to: '/dispensers', label: 'Dispensers & Nozzles', module: 'dispensers', action: 'view', icon: '⛽' },
   { to: '/fcc-devices', label: 'Devices', module: 'fcc_devices', action: 'view', icon: '📡' },
+  { to: '/pulse-math', label: 'Pulse MATH (Serial + Web)', module: 'fcc_devices', action: 'view', icon: '➗' },
+  { to: '/hardware-json', label: 'Hardware JSON Monitor', module: 'hardware', action: 'view', icon: '{ }' },
   { to: '/tanks', label: 'ATG Storage Tanks', module: 'tanks', action: 'view', icon: '🛢' },
 
   // Audits & Discrepancies

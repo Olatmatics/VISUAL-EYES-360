@@ -6,12 +6,14 @@ controller assignments are all generated. Nothing can be mis-assigned.
 
 import hashlib
 import uuid
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.deps import require_permission, require_super_admin
 from app.core.validation import utcnow
 from app.db.base import get_db
@@ -49,6 +51,7 @@ def status(db: Session = Depends(get_db), _: User = Depends(require_permission("
 @router.get("/connected")
 def connected_devices(db: Session = Depends(get_db), _: User = Depends(require_permission("dashboard", "view"))):
     """Compact list for the live device ticker (UID + location + link state)."""
+    cutoff = utcnow() - timedelta(minutes=settings.DEVICE_OFFLINE_AFTER_MINUTES)
     result = []
     for fcc in db.scalars(select(FCCDevice)).all():
         station = db.scalar(select(Station).where(Station.id == fcc.station_id))
@@ -57,7 +60,7 @@ def connected_devices(db: Session = Depends(get_db), _: User = Depends(require_p
             "station": station.name if station else "",
             "state": station.state.name if station and station.state else "",
             "lga": station.lga.name if station and station.lga else "",
-            "online": bool(fcc.is_online),
+            "online": bool(fcc.is_online) and fcc.last_heartbeat is not None and fcc.last_heartbeat >= cutoff,
             "last_seen": fcc.last_heartbeat.isoformat() if fcc.last_heartbeat else None,
         })
     for tank in db.scalars(select(Tank)).all():
@@ -68,7 +71,7 @@ def connected_devices(db: Session = Depends(get_db), _: User = Depends(require_p
             "station": station.name if station else "",
             "state": station.state.name if station and station.state else "",
             "lga": station.lga.name if station and station.lga else "",
-            "online": bool(controller.is_online) if controller else False,
+            "online": bool(controller and controller.is_online and controller.last_heartbeat and controller.last_heartbeat >= cutoff),
             "last_seen": controller.last_heartbeat.isoformat() if controller and controller.last_heartbeat else None,
         })
     return result
