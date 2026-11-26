@@ -179,6 +179,7 @@ void ensureWiFi() {
 }
 
 void connectWiFi() {
+  Serial.println("[WIFI] init STA");
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);

@@ -63,6 +63,7 @@ Expected boot lines:
 [RELAY] outputs OFF (firmware does not energise nozzle switch)  (Board 1 only)
 [BOOT] relays safe / sensors ready / pulse input ready / RFID reader ready
 [BOOT] config loaded
+[WIFI] init STA
 [WIFI] Connecting to 'cypher' (backend http://172.25.0.37:8000)
 [WIFI] Started — progress dots appear while connecting. Serial stays live.
 [BOOT] Wi-Fi started (non-blocking)
