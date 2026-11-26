@@ -205,14 +205,17 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
-  SPI.begin();
-  rfid.PCD_Init();
-  Serial.println("[BOOT] RFID reader ready");
+  Serial.println("[BOOT] serial ready");
+  // Start Wi-Fi before initialising the SPI/RFID reader.
   loadConfig();
   Serial.println("[BOOT] config loaded");
   connectWiFi();
   Serial.println("[BOOT] Wi-Fi started (non-blocking)");
+
+  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
+  SPI.begin();
+  rfid.PCD_Init();
+  Serial.println("[BOOT] RFID reader ready");
   Serial.println("READY. Type REGISTER and place a new card. Type HELP for commands.");
 }
 

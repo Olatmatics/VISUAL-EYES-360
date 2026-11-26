@@ -208,14 +208,17 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
-  pinMode(PULSE_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PULSE_PIN), onPulse, FALLING);
-  Serial.println("[BOOT] pulse input ready");
+  Serial.println("[BOOT] serial ready");
+  // Start Wi-Fi before attaching the pulse interrupt.
   loadConfig();
   Serial.println("[BOOT] config loaded");
   connectWiFi();
   Serial.println("[BOOT] Wi-Fi started (non-blocking)");
+
+  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
+  pinMode(PULSE_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PULSE_PIN), onPulse, FALLING);
+  Serial.println("[BOOT] pulse input ready");
   Serial.println("READY. Type HELP for commands.");
 }
 

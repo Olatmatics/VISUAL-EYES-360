@@ -265,20 +265,22 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("[BOOT] serial ready");
+  // Start Wi-Fi before touching any GPIO, interrupts or peripherals.
+  loadConfig();
+  Serial.println("[BOOT] config loaded");
+  connectWiFi();
+  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
+
   pinMode(RELAY_A, OUTPUT); pinMode(RELAY_B, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   pinMode(PULSE_A, INPUT_PULLUP); pinMode(PULSE_B, INPUT_PULLUP);
   pinMode(NOZZLE_SENSE_A, INPUT_PULLUP); pinMode(NOZZLE_SENSE_B, INPUT_PULLUP);
   pinMode(PULSE_TRIGGER, OUTPUT); digitalWrite(PULSE_TRIGGER, LOW);
   closeValves();
-  Serial.println("[BOOT] relays safe");
-  loadConfig();
-  Serial.println("[BOOT] config loaded");
   attachInterrupt(digitalPinToInterrupt(PULSE_A), onPulseA, FALLING);
   attachInterrupt(digitalPinToInterrupt(PULSE_B), onPulseB, FALLING);
-  Serial.println("[BOOT] pulse inputs ready");
-  connectWiFi();
-  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
+  Serial.println("[BOOT] relays safe + pulse inputs ready");
   Serial.println("READY. Type HELP for commands, CONFIG to see saved IDs.");
 }
 

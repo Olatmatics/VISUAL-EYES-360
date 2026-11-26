@@ -200,16 +200,19 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("[BOOT] serial ready");
+  // Start Wi-Fi before touching any GPIO or sensor bus.
+  loadConfig();
+  Serial.println("[BOOT] config loaded");
+  connectWiFi();
+  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
+
   pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(LIMIT_PIN, INPUT_PULLUP);
   dht.begin();
   Serial.println("[BOOT] sensors ready");
-  loadConfig();
-  Serial.println("[BOOT] config loaded");
-  connectWiFi();
-  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
   lastSend = millis();
   Serial.println("READY. Type HELP for commands, CONFIG to see saved IDs.");
 }

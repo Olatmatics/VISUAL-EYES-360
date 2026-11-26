@@ -60,8 +60,7 @@ HELP         → list every available command
 Expected boot lines:
 
 ```text
-[RELAY] outputs OFF (firmware does not energise nozzle switch)  (Board 1 only)
-[BOOT] relays safe / sensors ready / pulse input ready / RFID reader ready
+[BOOT] serial ready
 [BOOT] config loaded
 [WIFI] init STA
 [WIFI] persistence OFF
@@ -69,7 +68,10 @@ Expected boot lines:
 [WIFI] begin called
 [WIFI] auto-reconnect ON
 [WIFI] Started — progress dots appear while connecting. Serial stays live.
+[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.
 [BOOT] Wi-Fi started (non-blocking)
+[BOOT] relays safe + pulse inputs ready / sensors ready / RFID reader ready
+[RELAY] outputs OFF (firmware does not energise nozzle switch)  (Board 1 only)
 READY. Type HELP for commands, CONFIG to see saved IDs.
 ..........[WIFI] Connected IP=192.168.x.x
 ```
@@ -78,6 +80,20 @@ Wi-Fi connection is **non-blocking**: the board never freezes while joining, so
 `HELP`, `NETWORK`, `PING` and `SET` work even before the link is up. Dots print
 every half second while connecting, with a status line every 12 seconds. Once
 connected, GPIO 2 goes steady ON.
+
+### If a board freezes before `[WIFI] begin called`
+
+Upload the tiny diagnostic sketch
+`firmware/prototype/00_wifi_test/wifi_test/wifi_test.ino` **instead of** the normal
+board sketch. It only joins Wi-Fi and calls `/health`.
+
+- If the test sketch prints `[WIFI] OK IP=...` and `[PING] ... -> 200`, the
+  ESP32 hardware is fine; re-upload the normal sketch (Wi-Fi now starts before
+  any pins, interrupts, SPI or sensors are touched).
+- If the test sketch also freezes at `WiFi.begin()`, erase the flash once
+  (`python -m esptool --port COMxx erase_flash`), then upload the normal sketch
+  again. Also confirm the board has a good 5 V supply, because Wi-Fi startup
+  draws much more current than the relay lines.
 
 If it stays offline, check that `cypher` is a **2.4 GHz** network, the password
 is correct, and the board is near the router. On the PC, confirm the backend is
