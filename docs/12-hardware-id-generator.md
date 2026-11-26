@@ -64,7 +64,10 @@ Expected boot lines:
 [BOOT] relays safe / sensors ready / pulse input ready / RFID reader ready
 [BOOT] config loaded
 [WIFI] init STA
+[WIFI] persistence OFF
 [WIFI] Connecting to 'cypher' (backend http://172.25.0.37:8000)
+[WIFI] begin called
+[WIFI] auto-reconnect ON
 [WIFI] Started — progress dots appear while connecting. Serial stays live.
 [BOOT] Wi-Fi started (non-blocking)
 READY. Type HELP for commands, CONFIG to see saved IDs.

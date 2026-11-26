@@ -245,15 +245,17 @@ void loadConfig() {
 
 void connectWiFi() {
   Serial.println("[WIFI] init STA");
-  WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.persistent(true);
+  WiFi.persistent(false);  // credentials live in Preferences; never overwrite driver NVS
+  Serial.println("[WIFI] persistence OFF");
   if (wifiSsid.length() == 0 || wifiSsid == "YOUR_WIFI") {
     Serial.println("[WIFI] Not configured. Type: SET WIFI your-ssid|your-password");
     return;
   }
   Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+  Serial.println("[WIFI] begin called");
+  WiFi.setAutoReconnect(true);
+  Serial.println("[WIFI] auto-reconnect ON");
   wifiWasConnected = false;
   lastWifiDot = millis();
   lastWifiRetry = millis();
