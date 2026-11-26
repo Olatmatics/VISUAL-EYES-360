@@ -44,8 +44,8 @@
 Preferences prefs;
 
 // Defaults match the current bench database. Change from Serial if you reset data.
-const char* DEF_WIFI_SSID = "YOUR_WIFI";
-const char* DEF_WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* DEF_WIFI_SSID = "cypher";
+const char* DEF_WIFI_PASS = "12345678";
 const char* DEF_BACKEND   = "http://172.25.0.37:8000";
 const char* DEF_APIKEY    = "dev-ingest-key-change-me";
 const char* DEF_STATION   = "923a0b56-6e8f-4dc4-89f2-1f0dd8a93628";

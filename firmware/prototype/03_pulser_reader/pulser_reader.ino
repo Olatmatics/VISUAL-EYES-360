@@ -34,8 +34,8 @@
 
 Preferences prefs;
 
-const char* DEF_WIFI_SSID  = "YOUR_WIFI";
-const char* DEF_WIFI_PASS  = "YOUR_WIFI_PASSWORD";
+const char* DEF_WIFI_SSID  = "cypher";
+const char* DEF_WIFI_PASS  = "12345678";
 const char* DEF_BACKEND    = "http://172.25.0.37:8000";
 const char* DEF_DEVICE     = "PULSE-DEV-01";
 const char* DEF_FCC        = "fcc-matics-001";

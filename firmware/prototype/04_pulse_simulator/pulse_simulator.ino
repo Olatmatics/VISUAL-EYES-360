@@ -2,7 +2,7 @@
  * VISUAL EYES 360 - PROTOTYPE BOARD 4: PULSE SIMULATOR
  * Generates pulses so you can test the pulser reader without a real pump.
  * Wire GPIO 26 of this board to GPIO 27 of board 3 (common GND).
- * Serial 115200.
+ * No Wi-Fi is needed on this board. Serial 115200.
  *
  * Serial commands: HELP | START | STOP | RATE <ms> | BURST <n> | STATUS
  * Default rate 1000ms = 1 pulse/second. With PULSES_PER_LITRE=1 that is 1 L/s.

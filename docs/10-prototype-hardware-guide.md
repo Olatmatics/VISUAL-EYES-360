@@ -55,9 +55,12 @@ Keep `USE_MOCK_OPAY_GATEWAY=true` for bench testing. The mock webhook fires abou
 3. Select board **ESP32 Dev Module**, the correct COM port, and upload at 115200.
 4. After uploading, open Serial Monitor and type `HELP` to confirm the sketch is alive.
 
-You do not need to edit code to configure the bench. All sketches save settings
-in ESP32 Preferences, so they survive a power cycle. If Wi-Fi changes, type the
-new `SET WIFI ...` and then `REBOOT`.
+You do not need to edit code to configure the bench. All Wi-Fi sketches now
+default to SSID `cypher` and password `12345678`, so a fresh board connects
+without typing `SET WIFI`. All settings are saved in ESP32 Preferences and
+survive a power cycle. If a board was flashed with older settings, type
+`SET WIFI cypher|12345678` and then `REBOOT`. Board 4 has no Wi-Fi — it only
+generates pulses.
 
 ---
 
