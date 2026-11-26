@@ -95,6 +95,13 @@ unsigned long lastHeartbeat = 0;
 unsigned long lastCalFetch = 0;
 unsigned long dispenseStart = 0;
 
+// Explicit prototypes. Arduino IDE sometimes misses IRAM_ATTR interrupt ISRs.
+void closeValves();
+void sendHeartbeat();
+void fetchCalibration();
+void IRAM_ATTR onPulseA();
+void IRAM_ATTR onPulseB();
+
 String cfg(const char* key, const char* def) {
   String value = prefs.getString(key, "");
   return value.length() ? value : String(def);

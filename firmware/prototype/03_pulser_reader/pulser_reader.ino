@@ -68,6 +68,10 @@ unsigned long wifiBlinkAt = 0;
 bool commLedOn = false;
 bool wifiLedOn = false;
 
+// Explicit prototypes. Arduino IDE sometimes misses IRAM_ATTR interrupt ISRs.
+void fetchCalibration();
+void IRAM_ATTR onPulse();
+
 String cfg(const char* key, const char* def) {
   String v = prefs.getString(key, "");
   return v.length() ? v : String(def);

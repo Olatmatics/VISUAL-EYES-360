@@ -53,7 +53,10 @@ Keep `USE_MOCK_OPAY_GATEWAY=true` for bench testing. The mock webhook fires abou
 2. Install libraries: **ArduinoJson 6.x** (`StaticJsonDocument` is used),
    **MFRC522** by Miguel Balboa, and **Adafruit DHT sensor library**.
 3. Select board **ESP32 Dev Module**, the correct COM port, and upload at 115200.
-4. After uploading, open Serial Monitor and type `HELP` to confirm the sketch is alive.
+4. Arduino IDE needs each `.ino` inside a folder with the same name. Boards 01
+   and 04 already use this layout, for example
+   `01_fcc_pump/fcc_pump/fcc_pump.ino`.
+5. After uploading, open Serial Monitor and type `HELP` to confirm the sketch is alive.
 
 You do not need to edit code to configure the bench. All Wi-Fi sketches now
 default to SSID `cypher` and password `12345678`, so a fresh board connects
@@ -108,7 +111,7 @@ heartbeat every 30 seconds automatically.
 
 ## 4. Board 1 — FCC pump controller
 
-Open `01_fcc_pump/fcc_pump.ino`, upload, then type these in Serial Monitor.
+Open `01_fcc_pump/fcc_pump/fcc_pump.ino`, upload, then type these in Serial Monitor.
 Using the current bench IDs:
 
 ```text
