@@ -217,10 +217,14 @@ SET WIFI your-wifi-name|your-wifi-password
 SET BACKEND http://172.25.0.37:8000
 SET DEVICE TANK-DEV-01
 SET TANK 4d29b187-3ee7-473d-b434-558adf344d65
+SET HEIGHT 200
+SET CAPACITY 30000
 REBOOT
 READ
 SEND
 ```
+
+Board 2 also saves all values in Preferences; no code edit is needed.
 
 HC-SR04 ECHO is 5 V and must go through a **2k2 + 3k3 divider** to GPIO 18.
 Never put 12 V on an ESP32 GPIO.
