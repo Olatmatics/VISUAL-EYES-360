@@ -34,7 +34,11 @@ void loop() {
     if (c == "HELP") Serial.println("START | STOP | RATE <ms> | BURST <n> | STATUS");
     else if (c == "START") { running = true; Serial.println("[SIM] running"); }
     else if (c == "STOP") { running = false; Serial.println("[SIM] stopped"); }
-    else if (c.startsWith("RATE ")) { intervalMs = max(20UL, c.substring(5).toInt()); Serial.printf("[SIM] rate %lums\n", intervalMs); }
+    else if (c.startsWith("RATE ")) {
+      unsigned long requested = (unsigned long) c.substring(5).toInt();
+      intervalMs = requested < 20UL ? 20UL : requested;
+      Serial.printf("[SIM] rate %lums\n", intervalMs);
+    }
     else if (c.startsWith("BURST ")) {
       int n = c.substring(6).toInt();
       for (int i = 0; i < n; i++) { emitPulse(); delay(10); }
