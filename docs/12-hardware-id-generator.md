@@ -60,11 +60,20 @@ HELP         → list every available command
 Expected boot lines:
 
 ```text
+[RELAY] outputs OFF (firmware does not energise nozzle switch)  (Board 1 only)
+[BOOT] relays safe / sensors ready / pulse input ready / RFID reader ready
+[BOOT] config loaded
 [WIFI] Connecting to 'cypher' (backend http://172.25.0.37:8000)
-[WIFI] OK IP=192.168.x.x
----- NETWORK ----
-STATUS=CONNECTED  IP=192.168.x.x  RSSI=-xx dBm
+[WIFI] Started — progress dots appear while connecting. Serial stays live.
+[BOOT] Wi-Fi started (non-blocking)
+READY. Type HELP for commands, CONFIG to see saved IDs.
+..........[WIFI] Connected IP=192.168.x.x
 ```
+
+Wi-Fi connection is **non-blocking**: the board never freezes while joining, so
+`HELP`, `NETWORK`, `PING` and `SET` work even before the link is up. Dots print
+every half second while connecting, with a status line every 12 seconds. Once
+connected, GPIO 2 goes steady ON.
 
 If it stays offline, check that `cypher` is a **2.4 GHz** network, the password
 is correct, and the board is near the router. On the PC, confirm the backend is

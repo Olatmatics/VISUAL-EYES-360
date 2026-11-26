@@ -75,6 +75,8 @@ bool wifiLedOn = false;
 
 unsigned long registerStarted = 0;
 unsigned long lastWifiRetry = 0;
+unsigned long lastWifiDot = 0;
+unsigned long wifiDots = 0;
 bool wifiWasConnected = false;
 
 String cfg(const char* key, const char* def) {
@@ -154,14 +156,30 @@ void ensureWiFi() {
   bool up = WiFi.status() == WL_CONNECTED;
   if (up != wifiWasConnected) {
     wifiWasConnected = up;
-    Serial.println(up ? "[WIFI] Connected" : "[WIFI] Link lost — reconnecting");
+    wifiDots = 0;
+    lastWifiDot = millis();
+    if (up) {
+      Serial.println();
+      Serial.print("[WIFI] Connected IP="); Serial.println(WiFi.localIP().toString());
+    } else {
+      Serial.println("[WIFI] Link lost — reconnecting");
+    }
   }
-  if (!up && millis() - lastWifiRetry > 10000) {
-    lastWifiRetry = millis();
-    Serial.print("[WIFI] Retry ");
-    WiFi.reconnect();
-    delay(50);
-    Serial.printf("status=%d\n", (int)WiFi.status());
+  if (!up) {
+    if (millis() - lastWifiDot >= 500) {
+      lastWifiDot = millis();
+      Serial.print(".");
+      if (++wifiDots >= 24) {
+        wifiDots = 0;
+        Serial.printf(" status=%d\n", (int)WiFi.status());
+      }
+    }
+    if (millis() - lastWifiRetry >= 10000) {
+      lastWifiRetry = millis();
+      Serial.print("\n[WIFI] Retry ");
+      WiFi.reconnect();
+      Serial.printf("status=%d\n", (int)WiFi.status());
+    }
   }
 }
 
@@ -175,20 +193,11 @@ void connectWiFi() {
   }
   Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 12000) {
-    updateLeds();
-    delay(500); Serial.print(".");
-  }
-  Serial.println();
-  wifiWasConnected = WiFi.status() == WL_CONNECTED;
-  if (wifiWasConnected) {
-    Serial.print("[WIFI] OK IP="); Serial.println(WiFi.localIP().toString());
-  } else {
-    Serial.println("[WIFI] Offline — it will retry automatically. Card UID still prints locally.");
-    Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
-  }
-  printNetwork();
+  wifiWasConnected = false;
+  lastWifiDot = millis();
+  lastWifiRetry = millis();
+  Serial.println("[WIFI] Started — progress dots appear while connecting. Serial stays live.");
+  Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
 }
 
 void setup() {
@@ -196,8 +205,11 @@ void setup() {
   pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   SPI.begin();
   rfid.PCD_Init();
+  Serial.println("[BOOT] RFID reader ready");
   loadConfig();
+  Serial.println("[BOOT] config loaded");
   connectWiFi();
+  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
   Serial.println("READY. Type REGISTER and place a new card. Type HELP for commands.");
 }
 

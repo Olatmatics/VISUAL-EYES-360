@@ -69,6 +69,8 @@ bool commLedOn = false;
 bool wifiLedOn = false;
 
 unsigned long lastWifiRetry = 0;
+unsigned long lastWifiDot = 0;
+unsigned long wifiDots = 0;
 bool wifiWasConnected = false;
 
 // Explicit prototypes. Arduino IDE sometimes misses IRAM_ATTR interrupt ISRs.
@@ -156,14 +158,31 @@ void ensureWiFi() {
   bool up = WiFi.status() == WL_CONNECTED;
   if (up != wifiWasConnected) {
     wifiWasConnected = up;
-    Serial.println(up ? "[WIFI] Connected — type SEND to push telemetry" : "[WIFI] Link lost — reconnecting");
+    wifiDots = 0;
+    lastWifiDot = millis();
+    if (up) {
+      Serial.println();
+      Serial.print("[WIFI] Connected IP="); Serial.println(WiFi.localIP().toString());
+      fetchCalibration();
+    } else {
+      Serial.println("[WIFI] Link lost — reconnecting");
+    }
   }
-  if (!up && millis() - lastWifiRetry > 10000) {
-    lastWifiRetry = millis();
-    Serial.print("[WIFI] Retry ");
-    WiFi.reconnect();
-    delay(50);
-    Serial.printf("status=%d\n", (int)WiFi.status());
+  if (!up) {
+    if (millis() - lastWifiDot >= 500) {
+      lastWifiDot = millis();
+      Serial.print(".");
+      if (++wifiDots >= 24) {
+        wifiDots = 0;
+        Serial.printf(" status=%d\n", (int)WiFi.status());
+      }
+    }
+    if (millis() - lastWifiRetry >= 10000) {
+      lastWifiRetry = millis();
+      Serial.print("\n[WIFI] Retry ");
+      WiFi.reconnect();
+      Serial.printf("status=%d\n", (int)WiFi.status());
+    }
   }
 }
 
@@ -177,20 +196,11 @@ void connectWiFi() {
   }
   Serial.printf("[WIFI] Connecting to '%s' (backend %s)\n", wifiSsid.c_str(), backendUrl.c_str());
   WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
-  unsigned long started = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - started < 12000) {
-    updateLeds();
-    delay(500); Serial.print(".");
-  }
-  Serial.println();
-  wifiWasConnected = WiFi.status() == WL_CONNECTED;
-  if (wifiWasConnected) {
-    Serial.print("[WIFI] OK IP="); Serial.println(WiFi.localIP().toString());
-  } else {
-    Serial.println("[WIFI] Offline — it will retry automatically. Serial still works.");
-    Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
-  }
-  printNetwork();
+  wifiWasConnected = false;
+  lastWifiDot = millis();
+  lastWifiRetry = millis();
+  Serial.println("[WIFI] Started — progress dots appear while connecting. Serial stays live.");
+  Serial.println("[WIFI] Check: SSID must be 2.4 GHz, password correct, router near board.");
 }
 
 void setup() {
@@ -198,10 +208,12 @@ void setup() {
   pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   pinMode(PULSE_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(PULSE_PIN), onPulse, FALLING);
+  Serial.println("[BOOT] pulse input ready");
   loadConfig();
+  Serial.println("[BOOT] config loaded");
   connectWiFi();
+  Serial.println("[BOOT] Wi-Fi started (non-blocking)");
   Serial.println("READY. Type HELP for commands.");
-  if (WiFi.status() == WL_CONNECTED) fetchCalibration();
 }
 
 void IRAM_ATTR onPulse() {

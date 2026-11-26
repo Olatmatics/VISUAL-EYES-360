@@ -66,9 +66,10 @@ survive a power cycle. If a board was flashed with older settings, type
 clear saved settings and reboot with the sketch defaults. Board 4 has no Wi-Fi
 — it only generates pulses.
 
-Every network sketch also auto-retries the link and has `NETWORK`, `PING` and
-`WIFI` commands. See `docs/12-hardware-id-generator.md` for the full connectivity
-checklist.
+Every network sketch also connects **without blocking Serial**, auto-retries the
+link, prints `[BOOT]` step markers and progress dots, and has `NETWORK`, `PING`,
+`WIFI` and `FACTORY` commands. See `docs/12-hardware-id-generator.md` for the full
+connectivity checklist.
 
 ### LED indicators on every board
 
