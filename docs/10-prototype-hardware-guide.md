@@ -62,6 +62,17 @@ survive a power cycle. If a board was flashed with older settings, type
 `SET WIFI cypher|12345678` and then `REBOOT`. Board 4 has no Wi-Fi — it only
 generates pulses.
 
+### LED indicators on every board
+
+| LED | Pin | Meaning |
+|---|---|---|
+| Onboard blue LED | **GPIO 2** | Wi-Fi status on boards 1, 2, 3 and 5: **steady ON when connected**, slow blink while connecting. On board 4 (no Wi-Fi) it blinks **once per generated pulse**. |
+| External LED + 220 Ω resistor | **GPIO 22 → LED → GND** | Backend activity on boards 1, 2, 3 and 5: **very fast blinking** while sending to the backend, receiving a response, or receiving a queued command from the backend. |
+
+The external LED is active HIGH: wire `GPIO 22 → 220 Ω resistor → LED anode`,
+and `LED cathode → GND`. You can use any small 3 mm/5 mm LED. Do not connect
+the LED directly without the resistor.
+
 ---
 
 ## 3. Web setup before powering boards
@@ -212,6 +223,9 @@ Board 4: BURST 100      (exact 100 pulses)
 Board 3: COUNT          (should increase)
 Board 3: SEND           (see the JSON in Hardware JSON Monitor)
 ```
+
+The GPIO2 LED on Board 4 blinks once for every pulse. It is not a Wi‑Fi LED —
+Board 4 has no Wi‑Fi.
 
 ### Board 2 tank test
 
@@ -538,6 +552,9 @@ To stop: board 1 `RESET` closes both valves; board 4 `STOP`.
 
 | Device | ESP32 pin | Note |
 |---|---|---|
+| Onboard Wi-Fi LED (boards 1, 2, 3, 5) | GPIO 2 | steady ON when Wi-Fi is connected, slow blink while connecting |
+| External backend LED (boards 1, 2, 3, 5) | GPIO 22 | LED + 220 Ω to GND; fast blink on any backend request/response |
+| Onboard pulse LED (board 4) | GPIO 2 | blinks once per generated pulse; board 4 has no Wi-Fi |
 | Pulser input (board 3) | GPIO 27 | FALLING edge, 3 ms debounce, `INPUT_PULLUP` |
 | Pulse simulator output (board 4) | GPIO 26 | wire to board 3 GPIO 27, common ground |
 | Valve relay A / B (board 1) | GPIO 26 / 25 | active-low relay modules |

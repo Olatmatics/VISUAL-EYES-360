@@ -23,6 +23,10 @@
  *
  * The automatic heartbeat makes the web ticker show this controller online.
  * All request and response JSON is printed to Serial when JSON is ON.
+ *
+ * LEDs: GPIO2 (onboard) = Wi-Fi status. Steady ON when connected, slow blink
+ * while connecting. GPIO22 + 220R = backend activity, blinks very fast on
+ * every request, response and queued command.
  */
 
 #include <WiFi.h>
@@ -48,7 +52,8 @@ const char* FIRMWARE        = "ve360-fcc-bench-1.1";
 
 #define RELAY_A   26
 #define RELAY_B   25
-#define LED_PIN   2
+#define WIFI_LED_PIN 2      // onboard LED: Wi-Fi status
+#define COMM_LED_PIN 22     // add LED + 220R to GND: backend activity
 #define PULSE_A   27
 #define PULSE_B   14
 
@@ -66,6 +71,12 @@ float pulsesPerLitre = 1.0;
 float authorizedLitres = 0;
 bool jsonEcho = true;
 
+unsigned long commUntil = 0;
+unsigned long commToggleAt = 0;
+unsigned long wifiBlinkAt = 0;
+bool commLedOn = false;
+bool wifiLedOn = false;
+
 unsigned long lastPoll = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastCalFetch = 0;
@@ -79,6 +90,39 @@ void saveCfg(const char* key, const String& value) { prefs.putString(key, value)
 
 String currentDeviceUid() { return activeNozzleChar == 'A' ? deviceUidA : deviceUidB; }
 String currentNozzleId()  { return activeNozzleChar == 'A' ? nozzleAId : nozzleBId; }
+
+// ---- LED status helpers -----------------------------------------------------
+void markBackendActivity(unsigned long holdMs = 700) {
+  unsigned long now = millis();
+  commUntil = now + holdMs;
+  commToggleAt = now + 40;
+  commLedOn = true;
+  digitalWrite(COMM_LED_PIN, HIGH);
+}
+
+void updateLeds() {
+  unsigned long now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiLedOn = true;
+    digitalWrite(WIFI_LED_PIN, HIGH);
+  } else if (now >= wifiBlinkAt) {
+    wifiLedOn = !wifiLedOn;
+    wifiBlinkAt = now + 500;
+    digitalWrite(WIFI_LED_PIN, wifiLedOn ? HIGH : LOW);
+  }
+
+  if (now < commUntil) {
+    if (now >= commToggleAt) {
+      commLedOn = !commLedOn;
+      digitalWrite(COMM_LED_PIN, commLedOn ? HIGH : LOW);
+      commToggleAt = now + 35;
+    }
+  } else if (commLedOn) {
+    commLedOn = false;
+    digitalWrite(COMM_LED_PIN, LOW);
+  }
+}
 
 void loadConfig() {
   prefs.begin("ve360-fcc", false);
@@ -107,6 +151,7 @@ void connectWiFi() {
   Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+    updateLeds();
     delay(500);
     Serial.print(".");
   }
@@ -122,7 +167,8 @@ void connectWiFi() {
 void setup() {
   Serial.begin(115200);
   pinMode(RELAY_A, OUTPUT); pinMode(RELAY_B, OUTPUT);
-  pinMode(LED_PIN, OUTPUT); pinMode(PULSE_A, INPUT_PULLUP); pinMode(PULSE_B, INPUT_PULLUP);
+  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
+  pinMode(PULSE_A, INPUT_PULLUP); pinMode(PULSE_B, INPUT_PULLUP);
   closeValves();
   loadConfig();
   attachInterrupt(digitalPinToInterrupt(PULSE_A), onPulseA, FALLING);
@@ -140,13 +186,11 @@ void IRAM_ATTR onPulseB() { if (activeNozzleChar == 'B') pulses++; }
 
 void closeValves() {
   digitalWrite(RELAY_A, HIGH); digitalWrite(RELAY_B, HIGH); // active-low relay modules
-  digitalWrite(LED_PIN, LOW);
   Serial.println("[VALVE] CLOSED (both nozzles)");
 }
 void openValve(char n) {
   closeValves();
   if (n == 'A') digitalWrite(RELAY_A, LOW); else digitalWrite(RELAY_B, LOW);
-  digitalWrite(LED_PIN, HIGH);
   Serial.printf("[VALVE] OPEN nozzle %c\n", n);
 }
 
@@ -156,6 +200,7 @@ void echoJson(const char* tag, const String& body) {
 
 String requestJson(const char* method, const char* path, const String& body) {
   if (WiFi.status() != WL_CONNECTED) return "{\"error\":\"wifi_offline\"}";
+  markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + path);
   http.addHeader("Content-Type", "application/json");
@@ -165,6 +210,7 @@ String requestJson(const char* method, const char* path, const String& body) {
   else                                   code = http.POST(body);
   String res = http.getString();
   http.end();
+  markBackendActivity(600);
   echoJson("OUT", body.length() ? body : String("GET ") + path);
   Serial.printf("[HTTP] %s %s -> %d\n", method, path, code);
   echoJson("IN", res);
@@ -242,6 +288,7 @@ void pollCommands() {
     if (end > start) cmdId = res.substring(start, end);
   }
   if (typePos >= 0) {
+    markBackendActivity(1200);   // command arrived from backend
     state = AUTHORIZED;
     openValve(activeNozzleChar);
     pulses = 0;
@@ -255,6 +302,7 @@ void pollCommands() {
       postJson("/api/v1/fcc/commands/ack", ackBody);
     }
   } else if (res.indexOf("PAYMENT_FAILED") >= 0) {
+    markBackendActivity(1200);   // command arrived from backend
     state = ERROR_STATE;
     closeValves();
     Serial.println("[PAYMENT] DECLINED - valve stays closed");
@@ -370,6 +418,7 @@ void handleSerial(String line) {
 }
 
 void loop() {
+  updateLeds();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   if (WiFi.status() == WL_CONNECTED) {

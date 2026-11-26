@@ -31,6 +31,10 @@
  *
  * Simply placing a card on the reader always prints its UID.
  * All request/response JSON is printed when JSON is ON.
+ *
+ * LEDs: GPIO2 (onboard) = Wi-Fi status. Steady ON when connected, slow blink
+ * while connecting. GPIO22 + 220R = backend activity, blinks very fast on
+ * every card register/scan/fund/pay request and response.
  */
 
 #include <WiFi.h>
@@ -51,6 +55,8 @@ const char* DEF_APIKEY    = "dev-ingest-key-change-me";
 const char* DEF_STATION   = "923a0b56-6e8f-4dc4-89f2-1f0dd8a93628";
 const char* DEF_NOZZLE    = "d26a4199-393b-40fc-b4b6-45bea91a10c2";
 
+#define WIFI_LED_PIN 2      // onboard LED: Wi-Fi status
+#define COMM_LED_PIN 22     // add LED + 220R to GND: backend activity
 #define SS_PIN 27
 #define RST_PIN 5
 MFRC522 rfid(SS_PIN, RST_PIN);
@@ -60,6 +66,13 @@ String currentUid = "", pendingUid = "", pendingOwner = "";
 float currentBalance = 0;
 bool jsonEcho = true;
 bool waitingForCard = false;
+
+unsigned long commUntil = 0;
+unsigned long commToggleAt = 0;
+unsigned long wifiBlinkAt = 0;
+bool commLedOn = false;
+bool wifiLedOn = false;
+
 unsigned long registerStarted = 0;
 
 String cfg(const char* key, const char* def) {
@@ -67,6 +80,39 @@ String cfg(const char* key, const char* def) {
   return v.length() ? v : String(def);
 }
 void saveCfg(const char* key, const String& v) { prefs.putString(key, v); }
+
+// ---- LED status helpers -----------------------------------------------------
+void markBackendActivity(unsigned long holdMs = 700) {
+  unsigned long now = millis();
+  commUntil = now + holdMs;
+  commToggleAt = now + 40;
+  commLedOn = true;
+  digitalWrite(COMM_LED_PIN, HIGH);
+}
+
+void updateLeds() {
+  unsigned long now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiLedOn = true;
+    digitalWrite(WIFI_LED_PIN, HIGH);
+  } else if (now >= wifiBlinkAt) {
+    wifiLedOn = !wifiLedOn;
+    wifiBlinkAt = now + 500;
+    digitalWrite(WIFI_LED_PIN, wifiLedOn ? HIGH : LOW);
+  }
+
+  if (now < commUntil) {
+    if (now >= commToggleAt) {
+      commLedOn = !commLedOn;
+      digitalWrite(COMM_LED_PIN, commLedOn ? HIGH : LOW);
+      commToggleAt = now + 35;
+    }
+  } else if (commLedOn) {
+    commLedOn = false;
+    digitalWrite(COMM_LED_PIN, LOW);
+  }
+}
 
 void loadConfig() {
   prefs.begin("ve360-rfid", false);
@@ -89,6 +135,7 @@ void connectWiFi() {
   Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+    updateLeds();
     delay(500); Serial.print(".");
   }
   Serial.println();
@@ -101,6 +148,7 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
+  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   SPI.begin();
   rfid.PCD_Init();
   loadConfig();
@@ -124,6 +172,7 @@ void echoJson(const char* tag, const String& body) {
 
 String post(const char* path, const String& body) {
   if (WiFi.status() != WL_CONNECTED) return "{\"error\":\"wifi_offline\"}";
+  markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + path);
   http.addHeader("Content-Type", "application/json");
@@ -131,6 +180,7 @@ String post(const char* path, const String& body) {
   int code = http.POST(body);
   String res = http.getString();
   http.end();
+  markBackendActivity(600);
   echoJson("OUT", body);
   Serial.printf("[HTTP] %s -> %d\n", path, code);
   echoJson("IN", res);
@@ -286,6 +336,7 @@ void handleSerial(String line) {
 }
 
 void loop() {
+  updateLeds();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   if (waitingForCard && millis() - registerStarted > 30000) {
@@ -309,5 +360,5 @@ void loop() {
     }
     delay(300);
   }
-  delay(20);
+  delay(10);
 }

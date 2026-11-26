@@ -18,6 +18,10 @@
  *   HELP | READ | SEND | STATUS | LID
  *
  * HC-SR04 ECHO is 5 V -> use a 2k2/3k3 divider to ESP32 GPIO 18.
+ *
+ * LEDs: GPIO2 (onboard) = Wi-Fi status. Steady ON when connected, slow blink
+ * while connecting. GPIO22 + 220R = backend activity, blinks very fast on
+ * every telemetry send and response.
  */
 
 #include <WiFi.h>
@@ -37,6 +41,8 @@ const char* DEF_DEVICE    = "TANK-DEV-01";
 const char* DEF_TANK      = "YOUR_TANK_ID";
 const char* FIRMWARE      = "ve360-tank-bench-1.1";
 
+#define WIFI_LED_PIN 2      // onboard LED: Wi-Fi status
+#define COMM_LED_PIN 22     // add LED + 220R to GND: backend activity
 #define TRIG_PIN  5
 #define ECHO_PIN  18
 #define DHT_PIN   4
@@ -48,6 +54,12 @@ String wifiSsid, wifiPass, backendUrl, deviceUid, tankId;
 float tankHeightCm = 200.0;
 float tankCapacityL = 30000.0;
 bool jsonEcho = true;
+
+unsigned long commUntil = 0;
+unsigned long commToggleAt = 0;
+unsigned long wifiBlinkAt = 0;
+bool commLedOn = false;
+bool wifiLedOn = false;
 
 unsigned long eventNo = 0;
 unsigned long lastSend = 0;
@@ -62,6 +74,39 @@ String cfg(const char* key, const char* def) {
   return v.length() ? v : String(def);
 }
 void saveCfg(const char* key, const String& v) { prefs.putString(key, v); }
+
+// ---- LED status helpers -----------------------------------------------------
+void markBackendActivity(unsigned long holdMs = 700) {
+  unsigned long now = millis();
+  commUntil = now + holdMs;
+  commToggleAt = now + 40;
+  commLedOn = true;
+  digitalWrite(COMM_LED_PIN, HIGH);
+}
+
+void updateLeds() {
+  unsigned long now = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiLedOn = true;
+    digitalWrite(WIFI_LED_PIN, HIGH);
+  } else if (now >= wifiBlinkAt) {
+    wifiLedOn = !wifiLedOn;
+    wifiBlinkAt = now + 500;
+    digitalWrite(WIFI_LED_PIN, wifiLedOn ? HIGH : LOW);
+  }
+
+  if (now < commUntil) {
+    if (now >= commToggleAt) {
+      commLedOn = !commLedOn;
+      digitalWrite(COMM_LED_PIN, commLedOn ? HIGH : LOW);
+      commToggleAt = now + 35;
+    }
+  } else if (commLedOn) {
+    commLedOn = false;
+    digitalWrite(COMM_LED_PIN, LOW);
+  }
+}
 
 void loadConfig() {
   prefs.begin("ve360-tank", false);
@@ -85,6 +130,7 @@ void connectWiFi() {
   Serial.print("[WIFI] Connecting");
   unsigned long started = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+    updateLeds();
     delay(500);
     Serial.print(".");
   }
@@ -99,6 +145,7 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
+  pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(LIMIT_PIN, INPUT_PULLUP);
@@ -166,12 +213,14 @@ void sendTelemetry() {
     return;
   }
   String body = telemetryJson();
+  markBackendActivity(1200);
   HTTPClient http;
   http.begin(backendUrl + "/api/v1/device/prototype/telemetry");
   http.addHeader("Content-Type", "application/json");
   int code = http.POST(body);
   String res = http.getString();
   http.end();
+  markBackendActivity(600);
   echoJson("OUT", body);
   Serial.printf("[HTTP] telemetry -> %d\n", code);
   echoJson("IN", res);
@@ -244,6 +293,7 @@ void handleSerial(String line) {
 }
 
 void loop() {
+  updateLeds();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
   if (millis() - lastSend > 15000) {
@@ -251,5 +301,5 @@ void loop() {
     readAll();
     if (WiFi.status() == WL_CONNECTED) sendTelemetry();
   }
-  delay(100);
+  delay(10);
 }
