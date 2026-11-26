@@ -227,6 +227,47 @@ Board 3: SEND           (see the JSON in Hardware JSON Monitor)
 The GPIO2 LED on Board 4 blinks once for every pulse. It is not a Wi‑Fi LED —
 Board 4 has no Wi‑Fi.
 
+### Real-life-like nozzle switch mode (recommended bench upgrade)
+
+Payment approval **does not energise the nozzle switch**. It only arms the
+transaction. Your external relay contact is the physical start event.
+
+```text
+External nozzle relay contact ──> Board 01 GPIO13 (nozzle A) or GPIO12 (nozzle B)
+                              └─> other side of contact to GND
+
+Board 01 GPIO32 ────────────────> Board 04 GPIO25   (HIGH = start pulses)
+All three boards must share GND.
+
+Board 04 GPIO26 ──> Board 03 GPIO27   (pulser counting)
+Board 04 GPIO26 ──> Board 01 GPIO27   (nozzle A counting)
+```
+
+Flow:
+
+```text
+INIT / PAY approved
+    ↓
+Board 01: AUTHORIZED, waits. No relay energised, no pulses.
+    ↓
+You energise the external nozzle relay (the "nozzle switch")
+    ↓
+Board 01 sense pin goes LOW, GPIO32 goes HIGH
+    ↓
+Board 04 auto-starts pulses; GPIO2 LED blinks per pulse
+    ↓
+Board 03 counts pulses and sends telemetry to backend
+    ↓
+Board 01 counts pulses and stops GPIO32 when litres >= authorised litres
+    ↓
+Board 01 POSTs COMPLETE, closes the transaction
+```
+
+If the relay opens before the target is reached, Board 01 stops the pulses and
+returns to `AUTHORIZED`; closing the relay again resumes the same transaction.
+
+Manual `START` on Board 04 still works for testing without Board 01.
+
 ### Board 2 tank test
 
 ```text
@@ -539,12 +580,16 @@ POST /api/v1/fcc/transaction/complete
 5. Board 5: `REGISTER`, place new card, `NAME ...`, `SAVE`. Confirm UID and
    `NATIONWIDE: YES`; then `FUND 5000`, `PAY 1000`.
 6. Board 1: `NOZZLE A`, `POLL` (you should see the RFID `PAYMENT_SUCCESS`), `ACK`.
-   The valve opens. For a POS test instead, use `INIT 5000` and wait ~4 s before
+   Serial now says `APPROVED - waiting for nozzle switch relay`. **Nothing is
+   energised yet.** For a POS test instead, use `INIT 5000` and wait ~4 s before
    `POLL`.
-7. Board 1: `COMPLETE <litres>` or let it complete automatically from pulses.
+7. Energise your external nozzle relay. Board 01 senses it, tells Board 04 to
+   pulse, Board 03 counts, and Board 01 stops at the authorised litres. Board 01
+   then calls `COMPLETE` automatically.
 8. Web: check Fuel Transactions, Pulser Verification, Alerts, and the JSON monitor.
 
-To stop: board 1 `RESET` closes both valves; board 4 `STOP`.
+To stop: board 1 `RESET` stops the trigger and clears the transaction; board 4
+`STOP` only stops manual pulsing.
 
 ---
 
@@ -554,7 +599,9 @@ To stop: board 1 `RESET` closes both valves; board 4 `STOP`.
 |---|---|---|
 | Onboard Wi-Fi LED (boards 1, 2, 3, 5) | GPIO 2 | steady ON when Wi-Fi is connected, slow blink while connecting |
 | External backend LED (boards 1, 2, 3, 5) | GPIO 22 | LED + 220 Ω to GND; fast blink on any backend request/response |
-| Onboard pulse LED (board 4) | GPIO 2 | blinks once per generated pulse; board 4 has no Wi-Fi |
+| Nozzle switch sense (board 1) | GPIO 13 / 12 | external relay contact to GND = nozzle switch CLOSED |
+| Pulse start trigger (board 1 → board 4) | GPIO 32 → GPIO 25 | HIGH tells Board 04 to generate pulses |
+| Onboard pulse LED (board 4) | GPIO 2 | blinks once per generated pulse; board 4 has no Wi‑Fi |
 | Pulser input (board 3) | GPIO 27 | FALLING edge, 3 ms debounce, `INPUT_PULLUP` |
 | Pulse simulator output (board 4) | GPIO 26 | wire to board 3 GPIO 27, common ground |
 | Valve relay A / B (board 1) | GPIO 26 / 25 | active-low relay modules |

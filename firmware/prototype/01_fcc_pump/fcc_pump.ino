@@ -27,6 +27,13 @@
  * LEDs: GPIO2 (onboard) = Wi-Fi status. Steady ON when connected, slow blink
  * while connecting. GPIO22 + 220R = backend activity, blinks very fast on
  * every request, response and queued command.
+ *
+ * NOZZLE-SWITCH MODE:
+ *   Payment approval does NOT energise the nozzle switch.
+ *   GPIO13 (nozzle A) / GPIO12 (nozzle B) are INPUT_PULLUP sense inputs.
+ *   Your external relay contact closes the sensed pin to GND.
+ *   When the switch closes, GPIO32 goes HIGH to tell Board 04 to pulse.
+ *   When authorised litres is reached, GPIO32 goes LOW and pulses stop.
  */
 
 #include <WiFi.h>
@@ -56,6 +63,9 @@ const char* FIRMWARE        = "ve360-fcc-bench-1.1";
 #define COMM_LED_PIN 22     // add LED + 220R to GND: backend activity
 #define PULSE_A   27
 #define PULSE_B   14
+#define NOZZLE_SENSE_A 13   // external nozzle relay contact -> GND = CLOSED
+#define NOZZLE_SENSE_B 12   // external nozzle relay contact -> GND = CLOSED
+#define PULSE_TRIGGER 32    // HIGH tells Board 04 GPIO25 to emit pulses
 
 enum State { IDLE, PAYMENT_PENDING, AUTHORIZED, DISPENSING, COMPLETE, ERROR_STATE };
 State state = IDLE;
@@ -76,6 +86,9 @@ unsigned long commToggleAt = 0;
 unsigned long wifiBlinkAt = 0;
 bool commLedOn = false;
 bool wifiLedOn = false;
+bool senseAWasActive = false;
+bool senseBWasActive = false;
+bool pulseTriggerOn = false;
 
 unsigned long lastPoll = 0;
 unsigned long lastHeartbeat = 0;
@@ -124,6 +137,21 @@ void updateLeds() {
   }
 }
 
+// ---- Nozzle switch and pulse trigger helpers --------------------------------
+bool nozzleSwitchActive() {
+  return activeNozzleChar == 'A'
+    ? digitalRead(NOZZLE_SENSE_A) == LOW
+    : digitalRead(NOZZLE_SENSE_B) == LOW;
+}
+
+void setPulseTrigger(bool on) {
+  if (pulseTriggerOn == on) return;
+  pulseTriggerOn = on;
+  digitalWrite(PULSE_TRIGGER, on ? HIGH : LOW);
+  Serial.println(on ? "[TRIGGER] telling Board 04: PULSE"
+                    : "[TRIGGER] telling Board 04: STOP");
+}
+
 void loadConfig() {
   prefs.begin("ve360-fcc", false);
   wifiSsid     = cfg("ssid", DEF_WIFI_SSID);
@@ -169,6 +197,8 @@ void setup() {
   pinMode(RELAY_A, OUTPUT); pinMode(RELAY_B, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT); pinMode(COMM_LED_PIN, OUTPUT);
   pinMode(PULSE_A, INPUT_PULLUP); pinMode(PULSE_B, INPUT_PULLUP);
+  pinMode(NOZZLE_SENSE_A, INPUT_PULLUP); pinMode(NOZZLE_SENSE_B, INPUT_PULLUP);
+  pinMode(PULSE_TRIGGER, OUTPUT); digitalWrite(PULSE_TRIGGER, LOW);
   closeValves();
   loadConfig();
   attachInterrupt(digitalPinToInterrupt(PULSE_A), onPulseA, FALLING);
@@ -186,12 +216,7 @@ void IRAM_ATTR onPulseB() { if (activeNozzleChar == 'B') pulses++; }
 
 void closeValves() {
   digitalWrite(RELAY_A, HIGH); digitalWrite(RELAY_B, HIGH); // active-low relay modules
-  Serial.println("[VALVE] CLOSED (both nozzles)");
-}
-void openValve(char n) {
-  closeValves();
-  if (n == 'A') digitalWrite(RELAY_A, LOW); else digitalWrite(RELAY_B, LOW);
-  Serial.printf("[VALVE] OPEN nozzle %c\n", n);
+  Serial.println("[RELAY] outputs OFF (firmware does not energise nozzle switch)");
 }
 
 void echoJson(const char* tag, const String& body) {
@@ -290,11 +315,10 @@ void pollCommands() {
   if (typePos >= 0) {
     markBackendActivity(1200);   // command arrived from backend
     state = AUTHORIZED;
-    openValve(activeNozzleChar);
     pulses = 0;
     dispenseStart = millis();
-    state = DISPENSING;
-    Serial.println("[PAYMENT] APPROVED - valve open, dispensing");
+    setPulseTrigger(false);
+    Serial.println("[PAYMENT] APPROVED - waiting for nozzle switch relay");
     if (cmdId.length() > 0) {
       StaticJsonDocument<128> ack;
       ack["command_id"] = cmdId;
@@ -304,8 +328,9 @@ void pollCommands() {
   } else if (res.indexOf("PAYMENT_FAILED") >= 0) {
     markBackendActivity(1200);   // command arrived from backend
     state = ERROR_STATE;
+    setPulseTrigger(false);
     closeValves();
-    Serial.println("[PAYMENT] DECLINED - valve stays closed");
+    Serial.println("[PAYMENT] DECLINED - no pulse trigger, nozzle stays off");
     if (cmdId.length() > 0) {
       StaticJsonDocument<128> ack;
       ack["command_id"] = cmdId;
@@ -330,8 +355,10 @@ void complete(float litres) {
   doc["total_charged_ngn"] = litres * unitPrice;
   String body; serializeJson(doc, body);
   Serial.println("[COMPLETE] " + postJson("/api/v1/fcc/transaction/complete", body));
+  setPulseTrigger(false);
   closeValves();
   state = COMPLETE;
+  Serial.println("[TRANSACTION] target reached - pulses stopped");
 }
 
 void printConfig() {
@@ -373,6 +400,7 @@ void handleSerial(String line) {
     Serial.println("SET DEVICE_A uid | SET DEVICE_B uid | SET POS sn | SET DISPENSER id | SET PRICE n | SET PPL n");
     Serial.println("CONFIG | REBOOT | NOZZLE A|B | INIT 5000 | INIT 5L | POLL | ACK id | COMPLETE L");
     Serial.println("STATUS | RESET | HEARTBEAT | JSON ON|OFF | CAL FETCH | CAL SET n");
+    Serial.println("NOZZLE SWITCH: GPIO13(A)/GPIO12(B) to GND, Board 04 trigger on GPIO32");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
     int sp = rest.indexOf(' ');
@@ -406,7 +434,15 @@ void handleSerial(String line) {
                   (float)pulses / pulsesPerLitre, pulsesPerLitre, authorizedLitres);
     Serial.printf("UID=%s WIFI=%s RSSI=%d\n", currentDeviceUid().c_str(),
                   WiFi.status() == WL_CONNECTED ? "OK" : "OFF", WiFi.RSSI());
-  } else if (line == "RESET") { pulses = 0; activeTx = ""; state = IDLE; closeValves(); Serial.println("[RESET] pulses and transaction cleared"); }
+    Serial.printf("NOZZLE_SWITCH=%s TRIGGER_TO_04=%s\n",
+                  nozzleSwitchActive() ? "CLOSED" : "OPEN",
+                  pulseTriggerOn ? "ON" : "OFF");
+  } else if (line == "RESET") {
+    pulses = 0; activeTx = ""; state = IDLE;
+    setPulseTrigger(false);
+    closeValves();
+    Serial.println("[RESET] pulses and transaction cleared");
+  }
   else if (line == "HEARTBEAT") { if (WiFi.status() == WL_CONNECTED) sendHeartbeat(); else Serial.println("[HEARTBEAT] WiFi offline"); }
   else if (line.startsWith("JSON ")) {
     jsonEcho = line.substring(5) == "ON";
@@ -421,13 +457,44 @@ void loop() {
   updateLeds();
   if (Serial.available()) handleSerial(Serial.readStringUntil('\n'));
 
+  // Sense the external nozzle-switch relay. Contact to GND = CLOSED/energised.
+  bool senseA = digitalRead(NOZZLE_SENSE_A) == LOW;
+  if (senseA != senseAWasActive) {
+    senseAWasActive = senseA;
+    Serial.printf("[NOZZLE A] switch %s\n", senseA ? "CLOSED" : "OPEN");
+  }
+  bool senseB = digitalRead(NOZZLE_SENSE_B) == LOW;
+  if (senseB != senseBWasActive) {
+    senseBWasActive = senseB;
+    Serial.printf("[NOZZLE B] switch %s\n", senseB ? "CLOSED" : "OPEN");
+  }
+
   if (WiFi.status() == WL_CONNECTED) {
     if (millis() - lastHeartbeat > 30000) { lastHeartbeat = millis(); sendHeartbeat(); }
     if (millis() - lastCalFetch > 300000) { lastCalFetch = millis(); fetchCalibration(); }
     if (state == PAYMENT_PENDING && millis() - lastPoll > 2000) { lastPoll = millis(); pollCommands(); }
   }
 
-  if (state == DISPENSING && pulses >= (unsigned long)(authorizedLitres * pulsesPerLitre)) {
+  // Approval arms the transaction; the nozzle switch is the actual start.
+  if ((state == AUTHORIZED || state == DISPENSING) && nozzleSwitchActive()) {
+    if (state == AUTHORIZED) {
+      state = DISPENSING;
+      dispenseStart = millis();
+      setPulseTrigger(true);
+      Serial.println("[NOZZLE] switch closed - Board 04 told to pulse");
+    }
+  }
+
+  // If the switch opens early, stop pulses but keep the approval armed.
+  if (state == DISPENSING && !nozzleSwitchActive()) {
+    setPulseTrigger(false);
+    state = AUTHORIZED;
+    Serial.println("[NOZZLE] switch opened - dispensing paused");
+  }
+
+  // Stop at the authorised litres/naira worth of fuel.
+  if (state == DISPENSING && authorizedLitres > 0 &&
+      pulses >= (unsigned long)(authorizedLitres * pulsesPerLitre)) {
     complete((float)pulses / pulsesPerLitre);
   }
   delay(10);
