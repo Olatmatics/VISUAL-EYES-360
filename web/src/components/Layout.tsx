@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import DeviceTicker from './DeviceTicker'
 
-type NavItem = { to: string; label: string; module: string; action: string; icon: string; section?: string }
+type NavItem = { to: string; label: string; module: string; action: string; icon: string; section?: string; admin?: boolean }
 
 const NAV: NavItem[] = [
   { to: '/quick-setup', label: 'Start Here · Set Up', module: 'dashboard', action: 'view', icon: '⚡', section: 'START HERE' },
@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   // Forecourt Infrastructure
   { to: '/locations', label: 'Browse by Location', module: 'stations', action: 'view', icon: '🗺', section: 'INFRASTRUCTURE' },
   { to: '/device-directory', label: 'Device ID Directory', module: 'stations', action: 'view', icon: '🪪' },
+  { to: '/hardware-ids', label: 'Generate Hardware IDs', module: 'stations', action: 'view', icon: '🆔', admin: true },
   { to: '/stations', label: 'Stations Network', module: 'stations', action: 'view', icon: '◈' },
   { to: '/dispensers', label: 'Dispensers & Nozzles', module: 'dispensers', action: 'view', icon: '⛽' },
   { to: '/fcc-devices', label: 'Devices', module: 'fcc_devices', action: 'view', icon: '📡' },
@@ -58,7 +59,7 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
-  const links = NAV.filter((item) => can(item.module, item.action))
+  const links = NAV.filter((item) => can(item.module, item.action) && (!item.admin || user?.is_super_admin))
 
   return (
     <div className="app-shell">

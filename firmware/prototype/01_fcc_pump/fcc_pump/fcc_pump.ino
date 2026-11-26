@@ -471,7 +471,7 @@ void handleSerial(String line) {
     Serial.println("SET DEVICE_A uid | SET DEVICE_B uid | SET POS sn | SET DISPENSER id | SET PRICE n | SET PPL n");
     Serial.println("CONFIG | REBOOT | NOZZLE A|B | INIT 5000 | INIT 5L | POLL | ACK id | COMPLETE L");
     Serial.println("STATUS | RESET | HEARTBEAT | JSON ON|OFF | CAL FETCH | CAL SET n");
-    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG");
+    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG | FACTORY");
     Serial.println("NOZZLE SWITCH: GPIO13(A)/GPIO12(B) to GND, Board 04 trigger on GPIO32");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
@@ -480,6 +480,11 @@ void handleSerial(String line) {
     applySetting(rest.substring(0, sp), rest.substring(sp + 1));
   } else if (line == "CONFIG") printConfig();
   else if (line == "REBOOT") ESP.restart();
+  else if (line == "FACTORY") {
+    prefs.clear();
+    Serial.println("[FACTORY] Saved settings cleared — restarting with generated defaults");
+    ESP.restart();
+  }
   else if (line.startsWith("NOZZLE ")) {
     String n = line.substring(7); n.trim();
     activeNozzle = n;

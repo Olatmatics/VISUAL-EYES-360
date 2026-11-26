@@ -8,6 +8,12 @@ rejects assignments to nonexistent or cross-station equipment.
 `SUPERADMIN001` / `Admin@1234`. A manager without `dispensers:create` will not
 even see the **+ Register Dispenser** button.
 
+**Faster path:** Infrastructure → **Generate Hardware IDs** is available only to
+the Superior Administrator. It creates steps 1, 3, 5 and 6 together with short
+copyable codes and ESP32 code blocks. See `docs/12-hardware-id-generator.md`.
+The manual steps below still work and are useful when adding equipment to an
+existing station.
+
 ## 1. Station — required first
 
 Stations → **Register station**. Minimum: code, name, country, state, LGA, city,

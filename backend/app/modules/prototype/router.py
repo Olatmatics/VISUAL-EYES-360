@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.id_resolve import resolve_by_id_or_code
 from app.core.validation import utcnow
 from app.db.base import get_db
 from app.models.auth import User
@@ -49,9 +50,9 @@ def initiate_transaction(payload: dict[str, Any], db: Session = Depends(get_db))
     if db.scalar(select(PaymentRecord).where(PaymentRecord.reference == reference)):
         raise HTTPException(409, "client_tx_ref already exists")
 
-    nozzle = db.scalar(select(Nozzle).where(Nozzle.id == payload.get("nozzle_id")))
+    nozzle = resolve_by_id_or_code(db, Nozzle, payload.get("nozzle_id"))
     if nozzle is None:
-        raise HTTPException(404, "Nozzle not found")
+        raise HTTPException(404, "Nozzle not found — check the short code in the sketch")
     dispenser = db.scalar(select(Dispenser).where(Dispenser.id == nozzle.dispenser_id))
     if dispenser is None:
         raise HTTPException(404, "Dispenser not found")
@@ -179,10 +180,12 @@ def complete_transaction(payload: dict[str, Any], db: Session = Depends(get_db))
     pulser = float(payload.get("pulser_volume_l") or dispensed)
     difference = round(cpu - pulser, 3)
 
+    dispenser = resolve_by_id_or_code(db, Dispenser, payload.get("dispenser_id"))
+
     tx = FuelTransaction(
         transaction_ref=reference,
         station_id=payment.station_id,
-        dispenser_id=payload.get("dispenser_id"),
+        dispenser_id=dispenser.id if dispenser else None,
         nozzle_id=payment.nozzle_id,
         payment_channel=payment.payment_method,
         payment_ref=payment.transaction_id,

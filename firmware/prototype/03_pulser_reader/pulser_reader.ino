@@ -313,7 +313,7 @@ void handleSerial(String line) {
     Serial.println("SET WIFI ssid|pass | SET BACKEND url | SET DEVICE uid | SET FCC uid | SET NOZZLE id");
     Serial.println("SET PPL n | SET PPS n | CONFIG | REBOOT | JSON ON|OFF");
     Serial.println("COUNT | RESET | STATUS | CAL FETCH | CAL SET n | MATH n | MATH RATE n | MATH PPS | SEND");
-    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG");
+    Serial.println("NETWORK | PING | WIFI (retry now) | CONFIG | FACTORY");
   } else if (line.startsWith("SET ")) {
     String rest = line.substring(4);
     int sp = rest.indexOf(' ');
@@ -321,6 +321,11 @@ void handleSerial(String line) {
     applySetting(rest.substring(0, sp), rest.substring(sp + 1));
   } else if (line == "CONFIG") printConfig();
   else if (line == "REBOOT") ESP.restart();
+  else if (line == "FACTORY") {
+    prefs.clear();
+    Serial.println("[FACTORY] Saved settings cleared — restarting with generated defaults");
+    ESP.restart();
+  }
   else if (line.startsWith("JSON ")) {
     jsonEcho = line.substring(5) == "ON";
     prefs.putBool("json", jsonEcho);

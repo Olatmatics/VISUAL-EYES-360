@@ -62,8 +62,13 @@ You do not need to edit code to configure the bench. All Wi-Fi sketches now
 default to SSID `cypher` and password `12345678`, so a fresh board connects
 without typing `SET WIFI`. All settings are saved in ESP32 Preferences and
 survive a power cycle. If a board was flashed with older settings, type
-`SET WIFI cypher|12345678` and then `REBOOT`. Board 4 has no Wi-Fi — it only
-generates pulses.
+`SET WIFI cypher|12345678` (it reconnects immediately now), or `FACTORY` to
+clear saved settings and reboot with the sketch defaults. Board 4 has no Wi-Fi
+— it only generates pulses.
+
+Every network sketch also auto-retries the link and has `NETWORK`, `PING` and
+`WIFI` commands. See `docs/12-hardware-id-generator.md` for the full connectivity
+checklist.
 
 ### LED indicators on every board
 
@@ -81,7 +86,10 @@ the LED directly without the resistor.
 ## 3. Web setup before powering boards
 
 Do this once, in this order. It is also summarised in
-`docs/11-prototype-registration-checklist.md`.
+`docs/11-prototype-registration-checklist.md`. A faster alternative for a new
+site is **Infrastructure → Generate Hardware IDs** (admin only): it creates the
+station, pump, nozzles, controllers and POS terminals with short copyable codes
+and ready-to-paste ESP32 blocks. See `docs/12-hardware-id-generator.md`.
 
 1. **Station** — register the station. Current bench station:
    `matics oil and gas`, ID `923a0b56-6e8f-4dc4-89f2-1f0dd8a93628`.

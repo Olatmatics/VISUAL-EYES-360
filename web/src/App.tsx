@@ -16,6 +16,7 @@ import FCCDevices from './pages/FCCDevices'
 import FleetManagement from './pages/FleetManagement'
 import Forecourt from './pages/Forecourt'
 import ForgotPassword from './pages/ForgotPassword'
+import HardwareIds from './pages/HardwareIds'
 import HardwareJson from './pages/HardwareJson'
 import Login from './pages/Login'
 import Payments from './pages/Payments'
@@ -43,6 +44,12 @@ function Protected({ children, module, action = 'view' }: { children: ReactNode;
     return <Navigate to="/change-password" replace />
   }
   if (module && !can(module, action)) return <Navigate to="/access-denied" replace />
+  return <>{children}</>
+}
+
+function SuperAdmin({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user?.is_super_admin) return <Navigate to="/access-denied" replace />
   return <>{children}</>
 }
 
@@ -106,6 +113,7 @@ export default function App() {
             <Route path="fcc-devices" element={<Protected module="fcc_devices"><FCCDevices /></Protected>} />
             <Route path="pulse-math" element={<Protected module="fcc_devices"><PulseMath /></Protected>} />
             <Route path="hardware-json" element={<Protected module="hardware"><HardwareJson /></Protected>} />
+            <Route path="hardware-ids" element={<Protected><SuperAdmin><HardwareIds /></SuperAdmin></Protected>} />
             <Route path="tanks" element={<Protected module="tanks"><Tanks /></Protected>} />
             <Route path="pulser-reconciliation" element={<Protected module="pulser"><PulserReconciliation /></Protected>} />
             <Route path="tank-reconciliation" element={<Protected module="tank_reconciliation"><TankReconciliation /></Protected>} />

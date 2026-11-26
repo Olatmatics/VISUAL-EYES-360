@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.id_resolve import resolve_by_id_or_code
 from app.core.validation import utcnow
 from app.db.base import get_db
 from app.models.core import (
@@ -36,9 +37,9 @@ def _check_key(x_api_key: str | None = Header(default=None)) -> None:
 def _home_station(db: Session, station_id: str | None):
     if not station_id:
         return None
-    station = db.scalar(select(Station).where(Station.id == station_id))
+    station = resolve_by_id_or_code(db, Station, station_id)
     if station is None:
-        raise HTTPException(404, "Station not found")
+        raise HTTPException(404, "Station not found — check the short code in the sketch")
     return station
 
 
@@ -164,7 +165,7 @@ def rfid_authorize(payload: dict[str, Any], db: Session = Depends(get_db), _: No
     """Pay for fuel from the card wallet, then queue PAYMENT_SUCCESS for the nozzle."""
     uid = str(payload.get("uid") or "").strip().upper()
     amount = float(payload.get("amount_ngn") or 0)
-    nozzle = db.scalar(select(Nozzle).where(Nozzle.id == payload.get("nozzle_id")))
+    nozzle = resolve_by_id_or_code(db, Nozzle, payload.get("nozzle_id"))
     if not uid or amount <= 0 or nozzle is None:
         raise HTTPException(400, "uid, amount_ngn and nozzle_id are required")
 

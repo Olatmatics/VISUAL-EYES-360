@@ -19,6 +19,7 @@ from app.modules.device_ingest.router import router as device_ingest_router
 from app.modules.forecourt.router import router as forecourt_router
 from app.modules.geo.router import router as geo_router
 from app.modules.hardware.router import router as hardware_router
+from app.modules.hardware_ids.router import router as hardware_ids_router
 from app.modules.operations.router import router as operations_router
 from app.modules.simple.router import router as simple_router
 from app.modules.quicksetup.router import router as quicksetup_router
@@ -72,6 +73,7 @@ for router in (
     forecourt_router,
     geo_router,
     hardware_router,
+    hardware_ids_router,
     operations_router,
     tanks_router,
     transactions_router,

@@ -142,6 +142,7 @@ def migrate() -> list[str]:
     # 4. Data backfills that must accompany the schema changes.
     with engine.begin() as conn:
         _backfill_alert_references(conn)
+        _backfill_nozzle_codes(conn)
         _scrub_hardware_identifiers(conn)
 
     if changes:
@@ -171,6 +172,26 @@ def _backfill_alert_references(conn) -> None:
             ),
             {"ref": ref, "status": status_value, "id": alert_id},
         )
+
+
+def _backfill_nozzle_codes(conn) -> None:
+    """Give legacy nozzles a short code so old records work with new sketches."""
+    tables = set(inspect(conn).get_table_names())
+    if "nozzles" not in tables:
+        return
+    rows = conn.execute(
+        text("SELECT id, number FROM nozzles WHERE code IS NULL OR code = ''")
+    ).fetchall()
+    taken = {str(row[0]).upper() for row in conn.execute(text("SELECT code FROM nozzles WHERE code IS NOT NULL"))}
+    for nozzle_id, number in rows:
+        stem = str(nozzle_id).replace("-", "")[:6].upper() or "000000"
+        candidate = f"NZ-{stem}"
+        suffix = 1
+        while candidate.upper() in taken:
+            suffix += 1
+            candidate = f"NZ-{stem}{suffix}"
+        taken.add(candidate.upper())
+        conn.execute(text("UPDATE nozzles SET code = :code WHERE id = :id"), {"code": candidate, "id": nozzle_id})
 
 
 def _scrub_hardware_identifiers(conn) -> None:

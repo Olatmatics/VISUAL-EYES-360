@@ -142,6 +142,7 @@ class Nozzle(Base):
     dispenser_id: Mapped[str] = mapped_column(String(36), ForeignKey("dispensers.id"), index=True)
     tank_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tanks.id"), nullable=True, index=True)
     number: Mapped[int] = mapped_column(Integer, default=1)
+    code: Mapped[str | None] = mapped_column(String(20), unique=True, index=True, nullable=True)
     name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     product_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("fuel_products.id"), nullable=True)
     price: Mapped[float] = mapped_column(Float, default=0.0)
