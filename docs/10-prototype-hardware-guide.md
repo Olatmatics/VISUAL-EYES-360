@@ -239,11 +239,13 @@ transaction. Your external relay contact is the physical start event.
 External nozzle relay contact ──> Board 01 GPIO13 (nozzle A) or GPIO12 (nozzle B)
                               └─> other side of contact to GND
 
-Board 01 GPIO32 ────────────────> Board 04 GPIO25   (HIGH = start pulses)
+Board 01 GPIO32 ────────────────> Board 04 GPIO25   (HIGH = start motor + pulses)
 All three boards must share GND.
 
 Board 04 GPIO26 ──> Board 03 GPIO27   (pulser counting)
 Board 04 GPIO26 ──> Board 01 GPIO27   (nozzle A counting)
+
+Board 04 GPIO27 ──> motor driver / relay input   (motor ON with pulses)
 ```
 
 Flow:
@@ -251,25 +253,50 @@ Flow:
 ```text
 INIT / PAY approved
     ↓
-Board 01: AUTHORIZED, waits. No relay energised, no pulses.
+Board 01: AUTHORIZED, waits. No relay energised, no motor, no pulses.
     ↓
 You energise the external nozzle relay (the "nozzle switch")
     ↓
 Board 01 sense pin goes LOW, GPIO32 goes HIGH
     ↓
-Board 04 auto-starts pulses; GPIO2 LED blinks per pulse
+Board 04 turns on the motor (GPIO27) and auto-starts pulses
+    ↓
+Board 04 GPIO2 LED blinks per pulse; motor spins with the pulses
     ↓
 Board 03 counts pulses and sends telemetry to backend
     ↓
 Board 01 counts pulses and stops GPIO32 when litres >= authorised litres
     ↓
+Board 04 turns motor OFF and stops pulses
+    ↓
 Board 01 POSTs COMPLETE, closes the transaction
 ```
 
-If the relay opens before the target is reached, Board 01 stops the pulses and
-returns to `AUTHORIZED`; closing the relay again resumes the same transaction.
+If the relay opens before the target is reached, Board 01 stops the trigger;
+Board 04 turns the motor OFF and stops pulses, and Board 01 returns to
+`AUTHORIZED`; closing the relay again resumes the same transaction.
 
-Manual `START` on Board 04 still works for testing without Board 01.
+Manual `START` on Board 04 still works for testing without Board 01 — it also
+turns the motor on.
+
+#### DC motor wiring (bench only)
+
+GPIO27 is a **logic signal only**. It cannot power a motor. Use a motor driver
+or relay module between GPIO27 and the motor's own power supply:
+
+```text
+Board 04 GPIO27 ──> driver IN / relay IN
+Board 04 GND    ──> driver GND   (must share with driver supply GND)
+
+Driver OUT      ──> DC motor +
+External supply ──> driver VIN / motor power
+```
+
+- If your relay module turns ON when IN is LOW, change `MOTOR_ACTIVE_LOW` to `1`
+  at the top of the Board 04 sketch and re-upload.
+- A L298N, TB6612, or a single relay module works for a small bench DC motor.
+- Never connect the motor or its supply directly to an ESP32 GPIO.
+- Add a flyback diode across a bare DC motor if you drive it with a single transistor.
 
 ### Board 2 tank test
 
@@ -607,6 +634,7 @@ To stop: board 1 `RESET` stops the trigger and clears the transaction; board 4
 | Onboard pulse LED (board 4) | GPIO 2 | blinks once per generated pulse; board 4 has no Wi‑Fi |
 | Pulser input (board 3) | GPIO 27 | FALLING edge, 3 ms debounce, `INPUT_PULLUP` |
 | Pulse simulator output (board 4) | GPIO 26 | wire to board 3 GPIO 27, common ground |
+| Motor driver / relay input (board 4) | GPIO 27 | logic only; motor runs on its own supply |
 | Valve relay A / B (board 1) | GPIO 26 / 25 | active-low relay modules |
 | Board 1 pulse inputs | GPIO 27 / 14 | optional local counting |
 | HC-SR04 TRIG / ECHO | GPIO 5 / 18 | ECHO needs 2k2 + 3k3 divider |
