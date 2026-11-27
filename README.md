@@ -62,6 +62,7 @@ visual-eyes-360/
 | `10-prototype-hardware-guide.md` | Beginner end-to-end guide: 5 ESP32 boards, Serial commands, Pulse MATH, RFID, POS, JSON examples |
 | `11-prototype-registration-checklist.md` | Registration order and common bench failures |
 | `12-hardware-id-generator.md` | Administrator-only short ID generator, copyable ESP32 code and board connectivity checks |
+| `13-staff-training.md` | Plain-language staff training from customer arrival to final transaction check |
 
 ## Environment note (carried over from previous session)
 
